@@ -21,6 +21,7 @@ model User {
   borrowRecords         BorrowRecord[]
   approvedBorrows       BorrowRecord[]  @relation("ApproverBorrow")
   approvedWriteoffs     WriteoffRecord[] @relation("ApproverWriteoff")
+  auditLogs             AuditLog[]
   notifications         Notification[]
 }
 
@@ -49,12 +50,14 @@ model Asset {
   warrantyExpiry  DateTime?
   description     String?
   imageUrl        String?
+  deletedAt       DateTime?     // Soft-delete
   createdAt       DateTime      @default(now())
   updatedAt       DateTime      @updatedAt
 
   borrowRecords   BorrowRecord[]
   maintenanceLogs MaintenanceLog[]
   writeoffRecords WriteoffRecord[]
+  auditLogs       AuditLog[]
 }
 
 model BorrowRecord {
@@ -75,16 +78,17 @@ model BorrowRecord {
 }
 
 model MaintenanceLog {
-  id          String   @id @default(cuid())
-  assetId     String
-  asset       Asset    @relation(fields: [assetId], references: [id])
-  performedBy String?
-  description String
-  cost        Float    @default(0)
-  status      String   @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
-  date        DateTime @default(now())
-  createdAt   DateTime @default(now())
-  updatedAt   DateTime @updatedAt
+  id            String    @id @default(cuid())
+  assetId       String
+  asset         Asset     @relation(fields: [assetId], references: [id])
+  performedBy   String?
+  description   String
+  cost          Float     @default(0)
+  status        String    @default("IN_PROGRESS") // IN_PROGRESS, COMPLETED
+  date          DateTime  @default(now())
+  completedDate DateTime? // วันที่ซ่อมเสร็จ
+  createdAt     DateTime  @default(now())
+  updatedAt     DateTime  @updatedAt
 }
 
 model WriteoffRecord {
@@ -99,6 +103,18 @@ model WriteoffRecord {
   date        DateTime  @default(now())
   createdAt   DateTime  @default(now())
   updatedAt   DateTime  @updatedAt
+}
+
+model AuditLog {
+  id          String   @id @default(cuid())
+  assetId     String
+  asset       Asset    @relation(fields: [assetId], references: [id])
+  userId      String?
+  user        User?    @relation(fields: [userId], references: [id])
+  auditResult String   // FOUND_NORMAL, FOUND_DAMAGED, MISSING
+  notes       String?
+  location    String?  // สถานที่ที่ตรวจพบ
+  createdAt   DateTime @default(now())
 }
 
 model Notification {

@@ -136,3 +136,20 @@
 .custom-scrollbar::-webkit-scrollbar-thumb:hover {
   background-color: oklch(0.7 0.02 155);
 }
+
+/* Print styles for thermal label printing */
+@media print {
+  body * {
+    visibility: hidden !important;
+  }
+  .print-area,
+  .print-area * {
+    visibility: visible !important;
+  }
+  .print-area {
+    position: absolute;
+    left: 0;
+    top: 0;
+    width: 100%;
+  }
+}

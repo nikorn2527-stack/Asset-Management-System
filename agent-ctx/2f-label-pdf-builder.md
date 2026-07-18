@@ -1,0 +1,31 @@
+# Task 2f - label-pdf-builder
+
+## Work Log
+- Installed `qrcode.react` package for QR code SVG generation
+- Created `/src/components/thermal-label-print-view.tsx`:
+  - Dialog/modal with print preview of thermal labels
+  - Two label size options: 70x24mm and 80x36mm via ToggleGroup
+  - QR code (left) + asset info (right) layout per label
+  - Uses `QRCodeSVG` from `qrcode.react`
+  - Dynamic `@page` CSS injection for thermal printer dimensions
+  - Hidden `.thermal-label-print-area` div for print output
+  - `window.print()` with `@media print` rules to show only labels
+- Created `/src/components/borrow-return-pdf.tsx`:
+  - `printBorrowReturnForm()` function opens new window with A4-styled HTML
+  - Full Thai-language borrow-return form: header, asset table, borrow details, notes, signature area
+  - Thai date formatting (Buddhist era)
+  - Auto-triggers `window.print()` on load
+  - Proper status badges with color coding
+- Integrated into `assets-page.tsx`:
+  - Added Checkbox import and selection state (selectedIds Set)
+  - Added "เลือกทั้งหมด" checkbox in table header
+  - Added per-row checkboxes with emerald highlight for selected rows
+  - Added "พิมพ์ฉลาก (N)" button when assets are selected
+  - Added ThermalLabelPrintView component at end of JSX
+  - Updated skeleton/empty-state colSpan from 8 to 9
+- Integrated into `borrow-page.tsx`:
+  - Added "พิมพ์" button on every borrow record row
+  - Maps record data to BorrowReturnFormData and calls printBorrowReturnForm
+- Added print CSS to `globals.css`:
+  - `@media print` rules hiding all content except `.print-area`
+- ESLint passes cleanly, dev server compiles successfully

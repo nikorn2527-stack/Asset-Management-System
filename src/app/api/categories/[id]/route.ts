@@ -7,7 +7,7 @@ export async function DELETE(
 ) {
   try {
     const { id } = await params;
-    const assetCount = await db.asset.count({ where: { categoryId: id } });
+    const assetCount = await db.asset.count({ where: { categoryId: id, deletedAt: null } });
     if (assetCount > 0) {
       return NextResponse.json({ error: 'Cannot delete category with existing assets' }, { status: 400 });
     }

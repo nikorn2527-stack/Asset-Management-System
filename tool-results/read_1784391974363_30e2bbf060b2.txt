@@ -1,0 +1,704 @@
+     1→    60→  Shield,
+     2→    61→} from 'lucide-react';
+     3→    62→import { format } from 'date-fns';
+     4→    63→import { th } from 'date-fns/locale';
+     5→    64→import { useToast } from '@/hooks/use-toast';
+     6→    65→
+     7→    66→const STATUS_LABELS: Record<AssetStatus, string> = {
+     8→    67→  AVAILABLE: 'พร้อมใช้งาน',
+     9→    68→  BORROWED: 'ถูกยืม',
+    10→    69→  MAINTENANCE: 'ซ่อมบำรุง',
+    11→    70→  WRITEOFF: 'ตัดจำหน่าย',
+    12→    71→};
+    13→    72→
+    14→    73→const STATUS_BADGE: Record<AssetStatus, string> = {
+    15→    74→  AVAILABLE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    16→    75→  BORROWED: 'bg-amber-100 text-amber-800 border-amber-200',
+    17→    76→  MAINTENANCE: 'bg-orange-100 text-orange-800 border-orange-200',
+    18→    77→  WRITEOFF: 'bg-red-100 text-red-800 border-red-200',
+    19→    78→};
+    20→    79→
+    21→    80→const BORROW_STATUS_LABELS: Record<string, string> = {
+    22→    81→  PENDING: 'รออนุมัติ',
+    23→    82→  APPROVED: 'อนุมัติแล้ว',
+    24→    83→  REJECTED: 'ปฏิเสธ',
+    25→    84→  RETURNED: 'คืนแล้ว',
+    26→    85→  OVERDUE: 'เกินกำหนด',
+    27→    86→};
+    28→    87→
+    29→    88→function formatCurrency(num: number) {
+    30→    89→  return new Intl.NumberFormat('th-TH').format(Math.round(num));
+    31→    90→}
+    32→    91→
+    33→    92→interface AssetFormData {
+    34→    93→  name: string;
+    35→    94→  categoryId: string;
+    36→    95→  purchasePrice: string;
+    37→    96→  salvageValue: string;
+    38→    97→  purchaseDate: string;
+    39→    98→  usefulLifeYears: string;
+    40→    99→  location: string;
+    41→   100→  warrantyExpiry: string;
+    42→   101→  description: string;
+    43→   102→  status: AssetStatus;
+    44→   103→}
+    45→   104→
+    46→   105→const EMPTY_FORM: AssetFormData = {
+    47→   106→  name: '',
+    48→   107→  categoryId: '',
+    49→   108→  purchasePrice: '',
+    50→   109→  salvageValue: '',
+    51→   110→  purchaseDate: '',
+    52→   111→  usefulLifeYears: '5',
+    53→   112→  location: '',
+    54→   113→  warrantyExpiry: '',
+    55→   114→  description: '',
+    56→   115→  status: 'AVAILABLE',
+    57→   116→};
+    58→   117→
+    59→   118→export function AssetsPage() {
+    60→   119→  const currentUser = useAuthStore((s) => s.currentUser);
+    61→   120→  const { toast } = useToast();
+    62→   121→  const canManage = currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF';
+    63→   122→
+    64→   123→  // List state
+    65→   124→  const [assets, setAssets] = useState<Asset[]>([]);
+    66→   125→  const [categories, setCategories] = useState<AssetCategory[]>([]);
+    67→   126→  const [loading, setLoading] = useState(true);
+    68→   127→  const [search, setSearch] = useState('');
+    69→   128→  const [filterCategory, setFilterCategory] = useState('');
+    70→   129→  const [filterStatus, setFilterStatus] = useState('');
+    71→   130→  const [page, setPage] = useState(1);
+    72→   131→  const [totalPages, setTotalPages] = useState(1);
+    73→   132→  const [total, setTotal] = useState(0);
+    74→   133→
+    75→   134→  // Dialogs
+    76→   135→  const [showForm, setShowForm] = useState(false);
+    77→   136→  const [showDetail, setShowDetail] = useState(false);
+    78→   137→  const [showDelete, setShowDelete] = useState(false);
+    79→   138→  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+    80→   139→  const [form, setForm] = useState<AssetFormData>(EMPTY_FORM);
+    81→   140→  const [formLoading, setFormLoading] = useState(false);
+    82→   141→  const [detailData, setDetailData] = useState<Asset & { borrowRecords?: BorrowRecord[]; maintenanceLogs?: MaintenanceLog[] } | null>(null);
+    83→   142→  const [qrUrl, setQrUrl] = useState('');
+    84→   143→  const [deleteLoading, setDeleteLoading] = useState(false);
+    85→   144→
+    86→   145→  const fetchAssets = useCallback(async () => {
+    87→   146→    setLoading(true);
+    88→   147→    try {
+    89→   148→      const params = new URLSearchParams();
+    90→   149→      if (search) params.set('search', search);
+    91→   150→      if (filterCategory) params.set('category', filterCategory);
+    92→   151→      if (filterStatus) params.set('status', filterStatus);
+    93→   152→      params.set('page', String(page));
+    94→   153→      params.set('limit', '10');
+    95→   154→
+    96→   155→      const res = await fetch(`/api/assets?${params}`);
+    97→   156→      const data = await res.json();
+    98→   157→      setAssets(data.assets || []);
+    99→   158→      setTotalPages(data.totalPages || 1);
+   100→   159→      setTotal(data.total || 0);
+   101→   160→    } catch {
+   102→   161→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถโหลดข้อมูลครุภัณฑ์ได้', variant: 'destructive' });
+   103→   162→    } finally {
+   104→   163→      setLoading(false);
+   105→   164→    }
+   106→   165→  }, [search, filterCategory, filterStatus, page, toast]);
+   107→   166→
+   108→   167→  const fetchCategories = async () => {
+   109→   168→    try {
+   110→   169→      const res = await fetch('/api/categories');
+   111→   170→      const data = await res.json();
+   112→   171→      setCategories(data);
+   113→   172→    } catch {
+   114→   173→      // ignore
+   115→   174→    }
+   116→   175→  };
+   117→   176→
+   118→   177→  useEffect(() => {
+   119→   178→    fetchCategories();
+   120→   179→  }, []);
+   121→   180→
+   122→   181→  useEffect(() => {
+   123→   182→    fetchAssets();
+   124→   183→  }, [fetchAssets]);
+   125→   184→
+   126→   185→  // Reset page on filter change
+   127→   186→  useEffect(() => {
+   128→   187→    setPage(1);
+   129→   188→  }, [search, filterCategory, filterStatus]);
+   130→   189→
+   131→   190→  const openCreateForm = () => {
+   132→   191→    setForm(EMPTY_FORM);
+   133→   192→    setSelectedAsset(null);
+   134→   193→    setShowForm(true);
+   135→   194→  };
+   136→   195→
+   137→   196→  const openEditForm = (asset: Asset) => {
+   138→   197→    setSelectedAsset(asset);
+   139→   198→    setForm({
+   140→   199→      name: asset.name,
+   141→   200→      categoryId: asset.categoryId,
+   142→   201→      purchasePrice: String(asset.purchasePrice),
+   143→   202→      salvageValue: String(asset.salvageValue),
+   144→   203→      purchaseDate: asset.purchaseDate ? asset.purchaseDate.split('T')[0] : '',
+   145→   204→      usefulLifeYears: String(asset.usefulLifeYears),
+   146→   205→      location: asset.location || '',
+   147→   206→      warrantyExpiry: asset.warrantyExpiry ? asset.warrantyExpiry.split('T')[0] : '',
+   148→   207→      description: asset.description || '',
+   149→   208→      status: asset.status,
+   150→   209→    });
+   151→   210→    setShowForm(true);
+   152→   211→  };
+   153→   212→
+   154→   213→  const handleSubmit = async () => {
+   155→   214→    if (!form.name || !form.categoryId || !form.purchasePrice || !form.purchaseDate) {
+   156→   215→      toast({ title: 'กรุณากรอกข้อมูลที่จำเป็น', variant: 'destructive' });
+   157→   216→      return;
+   158→   217→    }
+   159→   218→    setFormLoading(true);
+   160→   219→    try {
+   161→   220→      const url = selectedAsset ? `/api/assets/${selectedAsset.id}` : '/api/assets';
+   162→   221→      const method = selectedAsset ? 'PUT' : 'POST';
+   163→   222→      const body: Record<string, unknown> = {
+   164→   223→        name: form.name,
+   165→   224→        categoryId: form.categoryId,
+   166→   225→        purchasePrice: parseFloat(form.purchasePrice),
+   167→   226→        salvageValue: parseFloat(form.salvageValue) || 0,
+   168→   227→        purchaseDate: form.purchaseDate,
+   169→   228→        usefulLifeYears: parseInt(form.usefulLifeYears) || 5,
+   170→   229→        location: form.location || null,
+   171→   230→        warrantyExpiry: form.warrantyExpiry || null,
+   172→   231→        description: form.description || null,
+   173→   232→        status: form.status,
+   174→   233→      };
+   175→   234→
+   176→   235→      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+   177→   236→      if (!res.ok) throw new Error();
+   178→   237→      toast({ title: selectedAsset ? 'แก้ไขครุภัณฑ์สำเร็จ' : 'เพิ่มครุภัณฑ์สำเร็จ' });
+   179→   238→      setShowForm(false);
+   180→   239→      fetchAssets();
+   181→   240→    } catch {
+   182→   241→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถบันทึกข้อมูลได้', variant: 'destructive' });
+   183→   242→    } finally {
+   184→   243→      setFormLoading(false);
+   185→   244→    }
+   186→   245→  };
+   187→   246→
+   188→   247→  const openDetail = async (asset: Asset) => {
+   189→   248→    setSelectedAsset(asset);
+   190→   249→    setShowDetail(true);
+   191→   250→    try {
+   192→   251→      const res = await fetch(`/api/assets/${asset.id}`);
+   193→   252→      const data = await res.json();
+   194→   253→      setDetailData(data);
+   195→   254→      const url = await QRCode.toDataURL(asset.sku, { width: 200, margin: 2, color: { dark: '#0f766e' } });
+   196→   255→      setQrUrl(url);
+   197→   256→    } catch {
+   198→   257→      setDetailData(asset);
+   199→   258→    }
+   200→   259→  };
+   201→   260→
+   202→   261→  const openDelete = (asset: Asset) => {
+   203→   262→    setSelectedAsset(asset);
+   204→   263→    setShowDelete(true);
+   205→   264→  };
+   206→   265→
+   207→   266→  const handleDelete = async () => {
+   208→   267→    if (!selectedAsset) return;
+   209→   268→    setDeleteLoading(true);
+   210→   269→    try {
+   211→   270→      const res = await fetch(`/api/assets/${selectedAsset.id}`, { method: 'DELETE' });
+   212→   271→      if (!res.ok) throw new Error();
+   213→   272→      toast({ title: 'ลบครุภัณฑ์สำเร็จ' });
+   214→   273→      setShowDelete(false);
+   215→   274→      fetchAssets();
+   216→   275→    } catch {
+   217→   276→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถลบข้อมูลได้', variant: 'destructive' });
+   218→   277→    } finally {
+   219→   278→      setDeleteLoading(false);
+   220→   279→    }
+   221→   280→  };
+   222→   281→
+   223→   282→  return (
+   224→   283→    <div className="space-y-4">
+   225→   284→      {/* Top Bar */}
+   226→   285→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   227→   286→        <div>
+   228→   287→          <h2 className="text-xl font-bold">ครุภัณฑ์ทั้งหมด</h2>
+   229→   288→          <p className="text-sm text-muted-foreground">ทั้งหมด {total} รายการ</p>
+   230→   289→        </div>
+   231→   290→        {canManage && (
+   232→   291→          <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
+   233→   292→            <Plus className="h-4 w-4 mr-2" />
+   234→   293→            เพิ่มครุภัณฑ์
+   235→   294→          </Button>
+   236→   295→        )}
+   237→   296→      </div>
+   238→   297→
+   239→   298→      {/* Filters */}
+   240→   299→      <div className="flex flex-col sm:flex-row gap-3">
+   241→   300→        <div className="relative flex-1">
+   242→   301→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   243→   302→          <Input
+   244→   303→            placeholder="ค้นหาครุภัณฑ์..."
+   245→   304→            value={search}
+   246→   305→            onChange={(e) => setSearch(e.target.value)}
+   247→   306→            className="pl-9"
+   248→   307→          />
+   249→   308→        </div>
+   250→   309→        <Select value={filterCategory} onValueChange={setFilterCategory}>
+   251→   310→          <SelectTrigger className="w-full sm:w-48">
+   252→   311→            <SelectValue placeholder="หมวดหมู่ทั้งหมด" />
+   253→   312→          </SelectTrigger>
+   254→   313→          <SelectContent>
+   255→   314→            <SelectItem value="all">หมวดหมู่ทั้งหมด</SelectItem>
+   256→   315→            {categories.map((cat) => (
+   257→   316→              <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   258→   317→            ))}
+   259→   318→          </SelectContent>
+   260→   319→        </Select>
+   261→   320→        <Select value={filterStatus} onValueChange={setFilterStatus}>
+   262→   321→          <SelectTrigger className="w-full sm:w-40">
+   263→   322→            <SelectValue placeholder="สถานะทั้งหมด" />
+   264→   323→          </SelectTrigger>
+   265→   324→          <SelectContent>
+   266→   325→            <SelectItem value="all">สถานะทั้งหมด</SelectItem>
+   267→   326→            <SelectItem value="AVAILABLE">พร้อมใช้งาน</SelectItem>
+   268→   327→            <SelectItem value="BORROWED">ถูกยืม</SelectItem>
+   269→   328→            <SelectItem value="MAINTENANCE">ซ่อมบำรุง</SelectItem>
+   270→   329→            <SelectItem value="WRITEOFF">ตัดจำหน่าย</SelectItem>
+   271→   330→          </SelectContent>
+   272→   331→        </Select>
+   273→   332→      </div>
+   274→   333→
+   275→   334→      {/* Table */}
+   276→   335→      <Card>
+   277→   336→        <CardContent className="p-0">
+   278→   337→          <div className="overflow-x-auto">
+   279→   338→            <Table>
+   280→   339→              <TableHeader>
+   281→   340→                <TableRow>
+   282→   341→                  <TableHead className="font-medium text-muted-foreground">SKU</TableHead>
+   283→   342→                  <TableHead className="font-medium text-muted-foreground">ชื่อครุภัณฑ์</TableHead>
+   284→   343→                  <TableHead className="font-medium text-muted-foreground hidden md:table-cell">หมวดหมู่</TableHead>
+   285→   344→                  <TableHead className="font-medium text-muted-foreground">สถานะ</TableHead>
+   286→   345→                  <TableHead className="font-medium text-muted-foreground text-right hidden sm:table-cell">ราคาซื้อ</TableHead>
+   287→   346→                  <TableHead className="font-medium text-muted-foreground text-right hidden lg:table-cell">มูลค่าปัจจุบัน</TableHead>
+   288→   347→                  <TableHead className="font-medium text-muted-foreground hidden lg:table-cell">สถานที่</TableHead>
+   289→   348→                  <TableHead className="font-medium text-muted-foreground text-right">จัดการ</TableHead>
+   290→   349→                </TableRow>
+   291→   350→              </TableHeader>
+   292→   351→              <TableBody>
+   293→   352→                {loading ? (
+   294→   353→                  Array.from({ length: 5 }).map((_, i) => (
+   295→   354→                    <TableRow key={i}>
+   296→   355→                      {Array.from({ length: 8 }).map((_, j) => (
+   297→   356→                        <TableCell key={j}>
+   298→   357→                          <Skeleton className="h-5 w-full" />
+   299→   358→                        </TableCell>
+   300→   359→                      ))}
+   301→   360→                    </TableRow>
+   302→   361→                  ))
+   303→   362→                ) : assets.length === 0 ? (
+   304→   363→                  <TableRow>
+   305→   364→                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+   306→   365→                      <Package className="h-10 w-10 mx-auto mb-2 opacity-40" />
+   307→   366→                      ไม่พบครุภัณฑ์
+   308→   367→                    </TableCell>
+   309→   368→                  </TableRow>
+   310→   369→                ) : (
+   311→   370→                  assets.map((asset) => (
+   312→   371→                    <TableRow key={asset.id} className="group">
+   313→   372→                      <TableCell className="font-mono text-xs text-muted-foreground">{asset.sku}</TableCell>
+   314→   373→                      <TableCell className="font-medium text-sm max-w-[200px] truncate">{asset.name}</TableCell>
+   315→   374→                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{asset.category?.name || '-'}</TableCell>
+   316→   375→                      <TableCell>
+   317→   376→                        <Badge variant="outline" className={`text-xs ${STATUS_BADGE[asset.status]}`}>
+   318→   377→                          {STATUS_LABELS[asset.status]}
+   319→   378→                        </Badge>
+   320→   379→                      </TableCell>
+   321→   380→                      <TableCell className="text-sm text-right hidden sm:table-cell">{formatCurrency(asset.purchasePrice)}</TableCell>
+   322→   381→                      <TableCell className="text-sm text-right hidden lg:table-cell">{formatCurrency(asset.currentValue)}</TableCell>
+   323→   382→                      <TableCell className="text-sm text-muted-foreground hidden lg:table-cell max-w-[120px] truncate">{asset.location || '-'}</TableCell>
+   324→   383→                      <TableCell className="text-right">
+   325→   384→                        <div className="flex items-center justify-end gap-1">
+   326→   385→                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDetail(asset)}>
+   327→   386→                            <Eye className="h-4 w-4" />
+   328→   387→                          </Button>
+   329→   388→                          {canManage && (
+   330→   389→                            <>
+   331→   390→                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditForm(asset)}>
+   332→   391→                                <Pencil className="h-4 w-4" />
+   333→   392→                              </Button>
+   334→   393→                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => openDelete(asset)}>
+   335→   394→                                <Trash2 className="h-4 w-4" />
+   336→   395→                              </Button>
+   337→   396→                            </>
+   338→   397→                          )}
+   339→   398→                        </div>
+   340→   399→                      </TableCell>
+   341→   400→                    </TableRow>
+   342→   401→                  ))
+   343→   402→                )}
+   344→   403→              </TableBody>
+   345→   404→            </Table>
+   346→   405→          </div>
+   347→   406→
+   348→   407→          {/* Pagination */}
+   349→   408→          {!loading && totalPages > 1 && (
+   350→   409→            <div className="flex items-center justify-between px-4 py-3 border-t">
+   351→   410→              <p className="text-sm text-muted-foreground">
+   352→   411→                หน้า {page} จาก {totalPages}
+   353→   412→              </p>
+   354→   413→              <div className="flex items-center gap-1">
+   355→   414→                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+   356→   415→                  <ChevronLeft className="h-4 w-4" />
+   357→   416→                </Button>
+   358→   417→                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+   359→   418→                  let pageNum: number;
+   360→   419→                  if (totalPages <= 5) {
+   361→   420→                    pageNum = i + 1;
+   362→   421→                  } else if (page <= 3) {
+   363→   422→                    pageNum = i + 1;
+   364→   423→                  } else if (page >= totalPages - 2) {
+   365→   424→                    pageNum = totalPages - 4 + i;
+   366→   425→                  } else {
+   367→   426→                    pageNum = page - 2 + i;
+   368→   427→                  }
+   369→   428→                  return (
+   370→   429→                    <Button
+   371→   430→                      key={pageNum}
+   372→   431→                      variant={page === pageNum ? 'default' : 'outline'}
+   373→   432→                      size="icon"
+   374→   433→                      className="h-8 w-8"
+   375→   434→                      onClick={() => setPage(pageNum)}
+   376→   435→                    >
+   377→   436→                      {pageNum}
+   378→   437→                    </Button>
+   379→   438→                  );
+   380→   439→                })}
+   381→   440→                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+   382→   441→                  <ChevronRight className="h-4 w-4" />
+   383→   442→                </Button>
+   384→   443→              </div>
+   385→   444→            </div>
+   386→   445→          )}
+   387→   446→        </CardContent>
+   388→   447→      </Card>
+   389→   448→
+   390→   449→      {/* Add/Edit Dialog */}
+   391→   450→      <Dialog open={showForm} onOpenChange={setShowForm}>
+   392→   451→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar">
+   393→   452→          <DialogHeader>
+   394→   453→            <DialogTitle>{selectedAsset ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์ใหม่'}</DialogTitle>
+   395→   454→            <DialogDescription>
+   396→   455→              {selectedAsset ? 'แก้ไขข้อมูลครุภัณฑ์' : 'กรอกข้อมูลครุภัณฑ์ที่ต้องการเพิ่ม'}
+   397→   456→            </DialogDescription>
+   398→   457→          </DialogHeader>
+   399→   458→          <div className="grid gap-4 py-2">
+   400→   459→            <div className="grid gap-2">
+   401→   460→              <Label htmlFor="form-name">ชื่อครุภัณฑ์ *</Label>
+   402→   461→              <Input id="form-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="เช่น คอมพิวเตอร์โน๊ตบุ๊ค" />
+   403→   462→            </div>
+   404→   463→            <div className="grid gap-2">
+   405→   464→              <Label htmlFor="form-category">หมวดหมู่ *</Label>
+   406→   465→              <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
+   407→   466→                <SelectTrigger id="form-category">
+   408→   467→                  <SelectValue placeholder="เลือกหมวดหมู่" />
+   409→   468→                </SelectTrigger>
+   410→   469→                <SelectContent>
+   411→   470→                  {categories.map((cat) => (
+   412→   471→                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   413→   472→                  ))}
+   414→   473→                </SelectContent>
+   415→   474→              </Select>
+   416→   475→            </div>
+   417→   476→            <div className="grid grid-cols-2 gap-4">
+   418→   477→              <div className="grid gap-2">
+   419→   478→                <Label htmlFor="form-price">ราคาซื้อ (บาท) *</Label>
+   420→   479→                <Input id="form-price" type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} placeholder="0.00" />
+   421→   480→              </div>
+   422→   481→              <div className="grid gap-2">
+   423→   482→                <Label htmlFor="form-salvage">มูลค่าซาก (บาท)</Label>
+   424→   483→                <Input id="form-salvage" type="number" value={form.salvageValue} onChange={(e) => setForm({ ...form, salvageValue: e.target.value })} placeholder="0.00" />
+   425→   484→              </div>
+   426→   485→            </div>
+   427→   486→            <div className="grid grid-cols-2 gap-4">
+   428→   487→              <div className="grid gap-2">
+   429→   488→                <Label htmlFor="form-date">วันที่ซื้อ *</Label>
+   430→   489→                <Input id="form-date" type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} />
+   431→   490→              </div>
+   432→   491→              <div className="grid gap-2">
+   433→   492→                <Label htmlFor="form-life">อายุการใช้งาน (ปี)</Label>
+   434→   493→                <Input id="form-life" type="number" value={form.usefulLifeYears} onChange={(e) => setForm({ ...form, usefulLifeYears: e.target.value })} />
+   435→   494→              </div>
+   436→   495→            </div>
+   437→   496→            <div className="grid grid-cols-2 gap-4">
+   438→   497→              <div className="grid gap-2">
+   439→   498→                <Label htmlFor="form-location">สถานที่ตั้ง</Label>
+   440→   499→                <Input id="form-location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="เช่น อาคาร A ชั้น 2" />
+   441→   500→              </div>
+   442→   501→              <div className="grid gap-2">
+   443→   502→                <Label htmlFor="form-warranty">วันหมดประกัน</Label>
+   444→   503→                <Input id="form-warranty" type="date" value={form.warrantyExpiry} onChange={(e) => setForm({ ...form, warrantyExpiry: e.target.value })} />
+   445→   504→              </div>
+   446→   505→            </div>
+   447→   506→            <div className="grid gap-2">
+   448→   507→              <Label htmlFor="form-status">สถานะ</Label>
+   449→   508→              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as AssetStatus })}>
+   450→   509→                <SelectTrigger id="form-status">
+   451→   510→                  <SelectValue />
+   452→   511→                </SelectTrigger>
+   453→   512→                <SelectContent>
+   454→   513→                  <SelectItem value="AVAILABLE">พร้อมใช้งาน</SelectItem>
+   455→   514→                  <SelectItem value="BORROWED">ถูกยืม</SelectItem>
+   456→   515→                  <SelectItem value="MAINTENANCE">ซ่อมบำรุง</SelectItem>
+   457→   516→                  <SelectItem value="WRITEOFF">ตัดจำหน่าย</SelectItem>
+   458→   517→                </SelectContent>
+   459→   518→              </Select>
+   460→   519→            </div>
+   461→   520→            <div className="grid gap-2">
+   462→   521→              <Label htmlFor="form-desc">รายละเอียด</Label>
+   463→   522→              <Textarea id="form-desc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="รายละเอียดเพิ่มเติม" rows={3} />
+   464→   523→            </div>
+   465→   524→          </div>
+   466→   525→          <div className="flex justify-end gap-3 pt-2">
+   467→   526→            <Button variant="outline" onClick={() => setShowForm(false)}>ยกเลิก</Button>
+   468→   527→            <Button onClick={handleSubmit} disabled={formLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   469→   528→              {formLoading ? 'กำลังบันทึก...' : selectedAsset ? 'บันทึกการแก้ไข' : 'เพิ่มครุภัณฑ์'}
+   470→   529→            </Button>
+   471→   530→          </div>
+   472→   531→        </DialogContent>
+   473→   532→      </Dialog>
+   474→   533→
+   475→   534→      {/* Detail Dialog */}
+   476→   535→      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+   477→   536→        <DialogContent className="max-w-2xl max-h-[90vh]">
+   478→   537→          <DialogHeader>
+   479→   538→            <DialogTitle>รายละเอียดครุภัณฑ์</DialogTitle>
+   480→   539→          </DialogHeader>
+   481→   540→          {detailData && (
+   482→   541→            <ScrollArea className="max-h-[70vh] pr-4 custom-scrollbar">
+   483→   542→              <div className="space-y-6">
+   484→   543→                {/* Header with QR */}
+   485→   544→                <div className="flex flex-col sm:flex-row gap-6">
+   486→   545→                  <div className="flex-1 space-y-3">
+   487→   546→                    <div className="flex items-center gap-2">
+   488→   547→                      <Badge variant="outline" className={`font-mono text-xs ${STATUS_BADGE[detailData.status]}`}>
+   489→   548→                        {detailData.sku}
+   490→   549→                      </Badge>
+   491→   550→                      <Badge variant="outline" className={`text-xs ${STATUS_BADGE[detailData.status]}`}>
+   492→   551→                        {STATUS_LABELS[detailData.status]}
+   493→   552→                      </Badge>
+   494→   553→                    </div>
+   495→   554→                    <h3 className="text-xl font-bold">{detailData.name}</h3>
+   496→   555→                    <p className="text-sm text-muted-foreground">{detailData.category?.name || '-'}</p>
+   497→   556→                  </div>
+   498→   557→                  {qrUrl && (
+   499→   558→                    <div className="flex flex-col items-center gap-2 shrink-0">
+   500→   559→                      <img src={qrUrl} alt="QR Code" className="h-32 w-32 rounded-lg border p-1" />
+   501→   560→                      <p className="text-[10px] text-muted-foreground font-mono">{detailData.sku}</p>
+   502→   561→                    </div>
+   503→   562→                  )}
+   504→   563→                </div>
+   505→   564→
+   506→   565→                <Separator />
+   507→   566→
+   508→   567→                {/* Info Grid */}
+   509→   568→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   510→   569→                  <div className="flex items-start gap-3">
+   511→   570→                    <Package className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   512→   571→                    <div>
+   513→   572→                      <p className="text-xs text-muted-foreground">ราคาซื้อ</p>
+   514→   573→                      <p className="text-sm font-medium">{formatCurrency(detailData.purchasePrice)} บาท</p>
+   515→   574→                    </div>
+   516→   575→                  </div>
+   517→   576→                  <div className="flex items-start gap-3">
+   518→   577→                    <QrCode className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   519→   578→                    <div>
+   520→   579→                      <p className="text-xs text-muted-foreground">มูลค่าปัจจุบัน</p>
+   521→   580→                      <p className="text-sm font-medium text-emerald-600">{formatCurrency(detailData.currentValue)} บาท</p>
+   522→   581→                    </div>
+   523→   582→                  </div>
+   524→   583→                  <div className="flex items-start gap-3">
+   525→   584→                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   526→   585→                    <div>
+   527→   586→                      <p className="text-xs text-muted-foreground">วันที่ซื้อ</p>
+   528→   587→                      <p className="text-sm font-medium">{detailData.purchaseDate ? format(new Date(detailData.purchaseDate), 'd MMMM yyyy', { locale: th }) : '-'}</p>
+   529→   588→                    </div>
+   530→   589→                  </div>
+   531→   590→                  <div className="flex items-start gap-3">
+   532→   591→                    <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   533→   592→                    <div>
+   534→   593→                      <p className="text-xs text-muted-foreground">วันหมดประกัน</p>
+   535→   594→                      <p className="text-sm font-medium">{detailData.warrantyExpiry ? format(new Date(detailData.warrantyExpiry), 'd MMMM yyyy', { locale: th }) : '-'}</p>
+   536→   595→                    </div>
+   537→   596→                  </div>
+   538→   597→                  <div className="flex items-start gap-3">
+   539→   598→                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   540→   599→                    <div>
+   541→   600→                      <p className="text-xs text-muted-foreground">สถานที่ตั้ง</p>
+   542→   601→                      <p className="text-sm font-medium">{detailData.location || '-'}</p>
+   543→   602→                    </div>
+   544→   603→                  </div>
+   545→   604→                  <div className="flex items-start gap-3">
+   546→   605→                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   547→   606→                    <div>
+   548→   607→                      <p className="text-xs text-muted-foreground">อายุการใช้งาน</p>
+   549→   608→                      <p className="text-sm font-medium">{detailData.usefulLifeYears} ปี</p>
+   550→   609→                    </div>
+   551→   610→                  </div>
+   552→   611→                </div>
+   553→   612→
+   554→   613→                {detailData.description && (
+   555→   614→                  <>
+   556→   615→                    <Separator />
+   557→   616→                    <div>
+   558→   617→                      <p className="text-xs text-muted-foreground mb-1">รายละเอียด</p>
+   559→   618→                      <p className="text-sm whitespace-pre-wrap">{detailData.description}</p>
+   560→   619→                    </div>
+   561→   620→                  </>
+   562→   621→                )}
+   563→   622→
+   564→   623→                {/* Depreciation info */}
+   565→   624→                <Separator />
+   566→   625→                <div>
+   567→   626→                  <CardHeader className="p-0 pb-3">
+   568→   627→                    <CardTitle className="text-sm font-medium">ตารางค่าเสื่อมราคา</CardTitle>
+   569→   628→                  </CardHeader>
+   570→   629→                  <div className="overflow-x-auto">
+   571→   630→                    <Table>
+   572→   631→                      <TableHeader>
+   573→   632→                        <TableRow>
+   574→   633→                          <TableHead className="font-medium text-muted-foreground text-xs">ปีที่</TableHead>
+   575→   634→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">มูลค่าเริ่มต้น</TableHead>
+   576→   635→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">ค่าเสื่อม</TableHead>
+   577→   636→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">มูลค่าสิ้นปี</TableHead>
+   578→   637→                        </TableRow>
+   579→   638→                      </TableHeader>
+   580→   639→                      <TableBody>
+   581→   640→                        {Array.from({ length: detailData.usefulLifeYears }, (_, i) => {
+   582→   641→                          const annualDep = (detailData.purchasePrice - detailData.salvageValue) / detailData.usefulLifeYears;
+   583→   642→                          const beginVal = Math.max(detailData.salvageValue, detailData.purchasePrice - annualDep * i);
+   584→   643→                          const endVal = Math.max(detailData.salvageValue, detailData.purchasePrice - annualDep * (i + 1));
+   585→   644→                          return (
+   586→   645→                            <TableRow key={i}>
+   587→   646→                              <TableCell className="text-xs">{i + 1}</TableCell>
+   588→   647→                              <TableCell className="text-xs text-right">{formatCurrency(beginVal)}</TableCell>
+   589→   648→                              <TableCell className="text-xs text-right">{formatCurrency(annualDep)}</TableCell>
+   590→   649→                              <TableCell className="text-xs text-right">{formatCurrency(endVal)}</TableCell>
+   591→   650→                            </TableRow>
+   592→   651→                          );
+   593→   652→                        })}
+   594→   653→                      </TableBody>
+   595→   654→                    </Table>
+   596→   655→                  </div>
+   597→   656→                </div>
+   598→   657→
+   599→   658→                {/* Borrow History */}
+   600→   659→                {detailData.borrowRecords && detailData.borrowRecords.length > 0 && (
+   601→   660→                  <>
+   602→   661→                    <Separator />
+   603→   662→                    <div>
+   604→   663→                      <CardHeader className="p-0 pb-3">
+   605→   664→                        <CardTitle className="text-sm font-medium">ประวัติการยืม-คืน</CardTitle>
+   606→   665→                      </CardHeader>
+   607→   666→                      <ScrollArea className="max-h-48 custom-scrollbar">
+   608→   667→                        <Table>
+   609→   668→                          <TableHeader>
+   610→   669→                            <TableRow>
+   611→   670→                              <TableHead className="font-medium text-muted-foreground text-xs">ผู้ยืม</TableHead>
+   612→   671→                              <TableHead className="font-medium text-muted-foreground text-xs">วันยืม</TableHead>
+   613→   672→                              <TableHead className="font-medium text-muted-foreground text-xs">กำหนดคืน</TableHead>
+   614→   673→                              <TableHead className="font-medium text-muted-foreground text-xs">สถานะ</TableHead>
+   615→   674→                            </TableRow>
+   616→   675→                          </TableHeader>
+   617→   676→                          <TableBody>
+   618→   677→                            {detailData.borrowRecords.map((record) => (
+   619→   678→                              <TableRow key={record.id}>
+   620→   679→                                <TableCell className="text-xs">{record.user?.name || '-'}</TableCell>
+   621→   680→                                <TableCell className="text-xs">{format(new Date(record.borrowDate), 'd MMM yy', { locale: th })}</TableCell>
+   622→   681→                                <TableCell className="text-xs">{format(new Date(record.expectedReturnDate), 'd MMM yy', { locale: th })}</TableCell>
+   623→   682→                                <TableCell>
+   624→   683→                                  <Badge variant="outline" className="text-[10px]">
+   625→   684→                                    {BORROW_STATUS_LABELS[record.status] || record.status}
+   626→   685→                                  </Badge>
+   627→   686→                                </TableCell>
+   628→   687→                              </TableRow>
+   629→   688→                            ))}
+   630→   689→                          </TableBody>
+   631→   690→                        </Table>
+   632→   691→                      </ScrollArea>
+   633→   692→                    </div>
+   634→   693→                  </>
+   635→   694→                )}
+   636→   695→
+   637→   696→                {/* Maintenance History */}
+   638→   697→                {detailData.maintenanceLogs && detailData.maintenanceLogs.length > 0 && (
+   639→   698→                  <>
+   640→   699→                    <Separator />
+   641→   700→                    <div>
+   642→   701→                      <CardHeader className="p-0 pb-3">
+   643→   702→                        <CardTitle className="text-sm font-medium">ประวัติการซ่อมบำรุง</CardTitle>
+   644→   703→                      </CardHeader>
+   645→   704→                      <ScrollArea className="max-h-48 custom-scrollbar">
+   646→   705→                        <Table>
+   647→   706→                          <TableHeader>
+   648→   707→                            <TableRow>
+   649→   708→                              <TableHead className="font-medium text-muted-foreground text-xs">วันที่</TableHead>
+   650→   709→                              <TableHead className="font-medium text-muted-foreground text-xs">รายละเอียด</TableHead>
+   651→   710→                              <TableHead className="font-medium text-muted-foreground text-xs text-right">ค่าใช้จ่าย</TableHead>
+   652→   711→                              <TableHead className="font-medium text-muted-foreground text-xs">สถานะ</TableHead>
+   653→   712→                            </TableRow>
+   654→   713→                          </TableHeader>
+   655→   714→                          <TableBody>
+   656→   715→                            {detailData.maintenanceLogs.map((log) => (
+   657→   716→                              <TableRow key={log.id}>
+   658→   717→                                <TableCell className="text-xs">{format(new Date(log.date), 'd MMM yy', { locale: th })}</TableCell>
+   659→   718→                                <TableCell className="text-xs max-w-[200px] truncate">{log.description}</TableCell>
+   660→   719→                                <TableCell className="text-xs text-right">{formatCurrency(log.cost)}</TableCell>
+   661→   720→                                <TableCell>
+   662→   721→                                  <Badge variant="outline" className="text-[10px]">
+   663→   722→                                    {log.status === 'IN_PROGRESS' ? 'ดำเนินการ' : 'เสร็จสิ้น'}
+   664→   723→                                  </Badge>
+   665→   724→                                </TableCell>
+   666→   725→                              </TableRow>
+   667→   726→                            ))}
+   668→   727→                          </TableBody>
+   669→   728→                        </Table>
+   670→   729→                      </ScrollArea>
+   671→   730→                    </div>
+   672→   731→                  </>
+   673→   732→                )}
+   674→   733→              </div>
+   675→   734→            </ScrollArea>
+   676→   735→          )}
+   677→   736→        </DialogContent>
+   678→   737→      </Dialog>
+   679→   738→
+   680→   739→      {/* Delete Confirmation */}
+   681→   740→      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+   682→   741→        <AlertDialogContent>
+   683→   742→          <AlertDialogHeader>
+   684→   743→            <AlertDialogTitle>ยืนยันการลบครุภัณฑ์</AlertDialogTitle>
+   685→   744→            <AlertDialogDescription>
+   686→   745→              คุณต้องการลบ &ldquo;{selectedAsset?.name}&rdquo; ({selectedAsset?.sku}) หรือไม่?
+   687→   746→              การกระทำนี้ไม่สามารถย้อนกลับได้ ข้อมูลที่เกี่ยวข้องทั้งหมดจะถูกลบออก
+   688→   747→            </AlertDialogDescription>
+   689→   748→          </AlertDialogHeader>
+   690→   749→          <AlertDialogFooter>
+   691→   750→            <AlertDialogCancel disabled={deleteLoading}>ยกเลิก</AlertDialogCancel>
+   692→   751→            <AlertDialogAction
+   693→   752→              onClick={handleDelete}
+   694→   753→              disabled={deleteLoading}
+   695→   754→              className="bg-red-600 hover:bg-red-700 text-white"
+   696→   755→            >
+   697→   756→              {deleteLoading ? 'กำลังลบ...' : 'ลบ'}
+   698→   757→            </AlertDialogAction>
+   699→   758→          </AlertDialogFooter>
+   700→   759→        </AlertDialogContent>
+   701→   760→      </AlertDialog>
+   702→   761→    </div>
+   703→   762→  );
+   704→   763→}

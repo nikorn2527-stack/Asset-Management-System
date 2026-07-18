@@ -42,9 +42,11 @@ import {
   X,
   RotateCcw,
   Loader2,
+  Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { printBorrowReturnForm } from '@/components/borrow-return-pdf';
 
 const STATUS_BADGE: Record<BorrowStatus, string> = {
   PENDING: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -290,6 +292,38 @@ export function BorrowPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
+                              <Button
+                                size="sm"
+                                variant="outline"
+                                className="text-gray-600 border-gray-300 hover:bg-gray-50 h-8 px-2"
+                                onClick={() => {
+                                  if (!record.asset || !record.user) return;
+                                  printBorrowReturnForm({
+                                    id: record.id,
+                                    borrowDate: record.borrowDate,
+                                    expectedReturnDate: record.expectedReturnDate,
+                                    actualReturnDate: record.actualReturnDate,
+                                    notes: record.notes,
+                                    status: record.status,
+                                    asset: {
+                                      sku: record.asset.sku,
+                                      name: record.asset.name,
+                                      category: record.asset.category ? { name: record.asset.category.name } : undefined,
+                                      location: record.asset.location,
+                                      purchasePrice: record.asset.purchasePrice,
+                                    },
+                                    user: {
+                                      name: record.user.name,
+                                      department: record.user.department,
+                                      phone: record.user.phone,
+                                    },
+                                    approvedBy: record.approvedBy ? { name: record.approvedBy.name } : undefined,
+                                  });
+                                }}
+                              >
+                                <Printer className="h-3 w-3 mr-1" />
+                                พิมพ์
+                              </Button>
                               {isStaffOrAdmin && record.status === 'PENDING' && (
                                 <>
                                   <Button

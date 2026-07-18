@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -58,10 +59,12 @@ import {
   Calendar,
   MapPin,
   Shield,
+  Printer,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
+import { ThermalLabelPrintView } from '@/components/thermal-label-print-view';
 
 const STATUS_LABELS: Record<AssetStatus, string> = {
   AVAILABLE: 'พร้อมใช้งาน',
@@ -141,6 +144,40 @@ export function AssetsPage() {
   const [detailData, setDetailData] = useState<Asset & { borrowRecords?: BorrowRecord[]; maintenanceLogs?: MaintenanceLog[] } | null>(null);
   const [qrUrl, setQrUrl] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
+
+  // Label print state
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showLabelPrint, setShowLabelPrint] = useState(false);
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === assets.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(assets.map((a) => a.id)));
+    }
+  };
+
+  const getSelectedAssetsForLabel = () => {
+    return assets
+      .filter((a) => selectedIds.has(a.id))
+      .map((a) => ({
+        sku: a.sku,
+        name: a.name,
+        category: a.category,
+        location: a.location,
+        purchaseDate: a.purchaseDate,
+        currentValue: a.currentValue,
+      }));
+  };
 
   const fetchAssets = useCallback(async () => {
     setLoading(true);
@@ -287,12 +324,25 @@ export function AssetsPage() {
           <h2 className="text-xl font-bold">ครุภัณฑ์ทั้งหมด</h2>
           <p className="text-sm text-muted-foreground">ทั้งหมด {total} รายการ</p>
         </div>
-        {canManage && (
-          <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
-            <Plus className="h-4 w-4 mr-2" />
-            เพิ่มครุภัณฑ์
-          </Button>
-        )}
+        <div className="flex items-center gap-2 shrink-0">
+          {selectedIds.size > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
+              onClick={() => setShowLabelPrint(true)}
+            >
+              <Printer className="h-4 w-4 mr-2" />
+              พิมพ์ฉลาก ({selectedIds.size})
+            </Button>
+          )}
+          {canManage && (
+            <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+              <Plus className="h-4 w-4 mr-2" />
+              เพิ่มครุภัณฑ์
+            </Button>
+          )}
+        </div>
       </div>
 
       {/* Filters */}
@@ -338,6 +388,13 @@ export function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
+                  <TableHead className="w-10">
+                    <Checkbox
+                      checked={assets.length > 0 && selectedIds.size === assets.length}
+                      onCheckedChange={toggleSelectAll}
+                      aria-label="เลือกทั้งหมด"
+                    />
+                  </TableHead>
                   <TableHead className="font-medium text-muted-foreground">SKU</TableHead>
                   <TableHead className="font-medium text-muted-foreground">ชื่อครุภัณฑ์</TableHead>
                   <TableHead className="font-medium text-muted-foreground hidden md:table-cell">หมวดหมู่</TableHead>
@@ -352,7 +409,7 @@ export function AssetsPage() {
                 {loading ? (
                   Array.from({ length: 5 }).map((_, i) => (
                     <TableRow key={i}>
-                      {Array.from({ length: 8 }).map((_, j) => (
+                      {Array.from({ length: 9 }).map((_, j) => (
                         <TableCell key={j}>
                           <Skeleton className="h-5 w-full" />
                         </TableCell>
@@ -361,14 +418,21 @@ export function AssetsPage() {
                   ))
                 ) : assets.length === 0 ? (
                   <TableRow>
-                    <TableCell colSpan={8} className="text-center py-12 text-muted-foreground">
+                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
                       <Package className="h-10 w-10 mx-auto mb-2 opacity-40" />
                       ไม่พบครุภัณฑ์
                     </TableCell>
                   </TableRow>
                 ) : (
                   assets.map((asset) => (
-                    <TableRow key={asset.id} className="group">
+                    <TableRow key={asset.id} className={"group" + (selectedIds.has(asset.id) ? ' bg-emerald-50/50' : '')}>
+                      <TableCell>
+                        <Checkbox
+                          checked={selectedIds.has(asset.id)}
+                          onCheckedChange={() => toggleSelect(asset.id)}
+                          aria-label={`เลือก ${asset.name}`}
+                        />
+                      </TableCell>
                       <TableCell className="font-mono text-xs text-muted-foreground">{asset.sku}</TableCell>
                       <TableCell className="font-medium text-sm max-w-[200px] truncate">{asset.name}</TableCell>
                       <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{asset.category?.name || '-'}</TableCell>
@@ -758,6 +822,14 @@ export function AssetsPage() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Thermal Label Print View */}
+      {showLabelPrint && getSelectedAssetsForLabel().length > 0 && (
+        <ThermalLabelPrintView
+          assets={getSelectedAssetsForLabel()}
+          onClose={() => setShowLabelPrint(false)}
+        />
+      )}
     </div>
   );
 }

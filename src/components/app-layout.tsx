@@ -35,6 +35,7 @@ import {
   ArrowLeftRight,
   Wrench,
   FileX,
+  ClipboardCheck,
   BarChart3,
   Users,
   Bell,
@@ -48,6 +49,7 @@ import { AssetsPage } from '@/components/pages/assets-page';
 import { BorrowPage } from '@/components/pages/borrow-page';
 import { MaintenancePage } from '@/components/pages/maintenance-page';
 import { WriteoffPage } from '@/components/pages/writeoff-page';
+import { AuditPage } from '@/components/pages/audit-page';
 import { ReportsPage } from '@/components/pages/reports-page';
 import { UsersPage } from '@/components/pages/users-page';
 import { SettingsPage } from '@/components/pages/settings-page';
@@ -58,6 +60,7 @@ const PAGE_CONFIG: { view: PageView; label: string; icon: React.ComponentType<{ 
   { view: 'borrow', label: 'ยืม-คืน', icon: ArrowLeftRight },
   { view: 'maintenance', label: 'ซ่อมบำรุง', icon: Wrench },
   { view: 'writeoff', label: 'ตัดจำหน่าย', icon: FileX },
+  { view: 'audit', label: 'ตรวจนับประจำปี', icon: ClipboardCheck },
   { view: 'reports', label: 'รายงาน', icon: BarChart3 },
   { view: 'users', label: 'จัดการผู้ใช้', icon: Users, adminOnly: true },
   { view: 'settings', label: 'ตั้งค่า', icon: Settings },
@@ -69,6 +72,7 @@ const PAGE_TITLES: Record<PageView, string> = {
   borrow: 'ยืม-คืนครุภัณฑ์',
   maintenance: 'ซ่อมบำรุง',
   writeoff: 'ตัดจำหน่าย',
+  audit: 'ตรวจนับประจำปี',
   reports: 'รายงาน',
   users: 'จัดการผู้ใช้',
   settings: 'ตั้งค่า',
@@ -112,6 +116,8 @@ function PageRouter({ page }: { page: PageView }) {
       return <MaintenancePage />;
     case 'writeoff':
       return <WriteoffPage />;
+    case 'audit':
+      return <AuditPage />;
     case 'reports':
       return <ReportsPage />;
     case 'users':

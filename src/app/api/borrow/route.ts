@@ -39,7 +39,7 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const asset = await db.asset.findUnique({ where: { id: assetId } });
+    const asset = await db.asset.findFirst({ where: { id: assetId, deletedAt: null } });
     if (!asset || asset.status !== 'AVAILABLE') {
       return NextResponse.json({ error: 'Asset not available' }, { status: 400 });
     }

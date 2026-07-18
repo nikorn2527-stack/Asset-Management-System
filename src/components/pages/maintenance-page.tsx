@@ -183,14 +183,14 @@ export function MaintenancePage() {
     if (!log.assetId) return;
     setActionLoading(log.id);
     try {
-      // Update asset status back to AVAILABLE
-      const res = await fetch(`/api/assets/${log.assetId}`, {
+      // Update maintenance log status to COMPLETED (also handles asset status)
+      const res = await fetch(`/api/maintenance/${log.id}`, {
         method: 'PUT',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ status: 'AVAILABLE' }),
+        body: JSON.stringify({ status: 'COMPLETED' }),
       });
       if (!res.ok) throw new Error('Failed');
-      toast({ title: 'เสร็จสิ้น', description: 'ครุภัณฑ์พร้อมใช้งานแล้ว' });
+      toast({ title: 'เสร็จสิ้น', description: 'บันทึกซ่อมบำรุงเสร็จสมบูรณ์ ครุภัณฑ์พร้อมใช้งานแล้ว' });
       fetchLogs();
     } catch {
       toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถอัปเดตสถานะได้', variant: 'destructive' });

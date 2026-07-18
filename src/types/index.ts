@@ -73,6 +73,7 @@ export interface MaintenanceLog {
   cost: number;
   status: MaintenanceStatus;
   date: string;
+  completedDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -89,6 +90,20 @@ export interface WriteoffRecord {
   date: string;
   createdAt: string;
   updatedAt: string;
+}
+
+export type AuditResult = 'FOUND_NORMAL' | 'FOUND_DAMAGED' | 'MISSING';
+
+export interface AuditLog {
+  id: string;
+  assetId: string;
+  asset?: Asset;
+  userId: string | null;
+  user?: User | null;
+  auditResult: AuditResult;
+  notes: string | null;
+  location: string | null;
+  createdAt: string;
 }
 
 export interface Notification {
@@ -119,4 +134,4 @@ export interface DashboardStats {
   depreciationSummary: { totalDepreciation: number; currentValue: number; originalValue: number };
 }
 
-export type PageView = 'dashboard' | 'assets' | 'borrow' | 'maintenance' | 'writeoff' | 'reports' | 'users' | 'settings';
+export type PageView = 'dashboard' | 'assets' | 'borrow' | 'maintenance' | 'writeoff' | 'audit' | 'reports' | 'users' | 'settings';
