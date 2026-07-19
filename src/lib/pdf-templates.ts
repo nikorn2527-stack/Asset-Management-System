@@ -1047,3 +1047,203 @@ export function generateWriteoffFormHTML(data: WriteoffFormData): string {
 </body>
 </html>`;
 }
+// ─── Audit Worksheet Template ─────────────────────────────────────────────
+
+export interface AuditWorksheetData {
+  organizationName?: string;
+  auditYear: number;
+  printDate: string;
+  filterLabel: string;
+  groups: Array<{
+    location: string;
+    assets: Array<{
+      no: number;
+      sku: string;
+      name: string;
+      category: string;
+      location: string;
+      currentValue: number;
+    }>;
+  }>;
+  totalAssets: number;
+}
+
+export function generateAuditWorksheetHtml(data: AuditWorksheetData): string {
+  const now = new Date().toLocaleDateString('th-TH', {
+    year: 'numeric', month: 'long', day: 'numeric',
+  });
+  const formatCurrency = (val: number) =>
+    new Intl.NumberFormat('th-TH').format(Math.round(val));
+
+  const groupsHtml = data.groups
+    .map((group) => {
+      const rowsHtml = group.assets
+        .map(
+          (a) => `
+        <tr>
+          <td class="center">${a.no}</td>
+          <td class="center">${a.sku}</td>
+          <td>${a.name}</td>
+          <td class="center">${a.category}</td>
+          <td class="center small">${a.location}</td>
+          <td class="center">${formatCurrency(a.currentValue)}</td>
+          <td class="center check">☐</td>
+          <td class="center check">☐</td>
+          <td class="center check">☐</td>
+          <td class="notes"></td>
+        </tr>`
+        )
+        .join('');
+
+      return `
+      <div class="worksheet-group">
+        <div class="group-header">
+          <span class="group-icon">📍</span>
+          <strong>${group.location}</strong>
+          <span class="group-count">(${group.assets.length} รายการ)</span>
+        </div>
+        <table class="audit-table">
+          <thead>
+            <tr>
+              <th class="w40">ลำดับ</th>
+              <th class="w70">รหัส</th>
+              <th>ชื่อครุภัณฑ์</th>
+              <th class="w70">หมวดหมู่</th>
+              <th class="w80">สถานที่</th>
+              <th class="w80">มูลค่า(บ.)</th>
+              <th class="w50">ปกติ</th>
+              <th class="w50">ชำรุด</th>
+              <th class="w50">ไม่พบ</th>
+              <th>หมายเหตุ</th>
+            </tr>
+          </thead>
+          <tbody>${rowsHtml}</tbody>
+        </table>
+        <div class="group-summary">
+          รวม: ${group.assets.length} รายการ
+        </div>
+      </div>`;
+    })
+    .join('');
+
+  return `<!DOCTYPE html>
+<html lang="th">
+<head>
+  <meta charset="utf-8">
+  <title>แบบตรวจนับครุภัณฑ์ ปีงบประมาณ ${data.auditYear}</title>
+  <link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    * { margin: 0; padding: 0; box-sizing: border-box; }
+    body {
+      font-family: 'Sarabun', sans-serif;
+      font-size: 11pt;
+      color: #1a1a1a;
+      line-height: 1.5;
+      background: #fff;
+      padding: 0;
+    }
+    @page { size: A4 landscape; margin: 12mm 10mm; }
+    @media print {
+      body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+      .no-print { display: none !important; }
+      .worksheet-group { break-inside: avoid; }
+    }
+    .document { max-width: 297mm; margin: 0 auto; padding: 15px 20px; }
+    .doc-header { text-align: center; border-bottom: 3px double #333; padding-bottom: 10px; margin-bottom: 12px; }
+    .doc-header h1 { font-size: 18pt; font-weight: 700; margin-bottom: 2px; }
+    .doc-header .subtitle { font-size: 13pt; font-weight: 500; color: #333; }
+    .doc-meta { display: flex; justify-content: space-between; flex-wrap: wrap; gap: 8px; margin-bottom: 12px; padding: 8px 12px; background: #f8f9fa; border-radius: 6px; font-size: 10.5pt; }
+    .doc-meta span { display: inline-flex; gap: 4px; }
+    .doc-meta strong { color: #333; }
+    .summary-bar { display: flex; gap: 8px; margin-bottom: 14px; flex-wrap: wrap; }
+    .summary-card { flex: 1; min-width: 100px; text-align: center; padding: 6px 10px; border-radius: 6px; font-size: 10.5pt; }
+    .summary-card .num { font-size: 16pt; font-weight: 700; display: block; }
+    .summary-card .label { color: #555; font-size: 9pt; }
+    .sc-total { background: #e8f0fe; } .sc-total .num { color: #1a56db; }
+    .sc-groups { background: #fef3e2; } .sc-groups .num { color: #b45309; }
+    .worksheet-group { margin-bottom: 14px; border: 1px solid #ddd; border-radius: 8px; overflow: hidden; }
+    .group-header { display: flex; align-items: center; gap: 6px; padding: 7px 12px; background: #f0f4ff; border-bottom: 1px solid #ddd; font-size: 12pt; }
+    .group-icon { font-size: 14pt; }
+    .group-count { color: #666; font-size: 10pt; font-weight: 400; margin-left: auto; }
+    .audit-table { width: 100%; border-collapse: collapse; font-size: 9.5pt; }
+    .audit-table th { background: #f1f5f9; padding: 5px 4px; text-align: center; font-weight: 600; border: 1px solid #ddd; font-size: 9pt; white-space: nowrap; }
+    .audit-table td { padding: 4px; border: 1px solid #e2e8f0; vertical-align: middle; }
+    .audit-table tbody tr:nth-child(even) { background: #fafbfc; }
+    .audit-table tbody tr:hover { background: #f0f7ff; }
+    .center { text-align: center; }
+    .small { font-size: 8.5pt; }
+    .check { font-size: 14pt; color: #94a3b8; }
+    .notes { min-width: 120px; }
+    .w40 { width: 40px; } .w50 { width: 50px; } .w70 { width: 70px; } .w80 { width: 80px; }
+    .group-summary { padding: 4px 12px; text-align: right; font-size: 9pt; color: #666; border-top: 1px solid #eee; }
+    .signature-section { margin-top: 20px; display: flex; justify-content: space-between; gap: 30px; padding: 15px 0; }
+    .sig-box { text-align: center; flex: 1; }
+    .sig-box .sig-line { border-bottom: 1px solid #333; width: 180px; margin: 40px auto 5px; }
+    .sig-box .sig-label { font-size: 10pt; color: #555; }
+    .footer { margin-top: 15px; padding-top: 8px; border-top: 1px solid #ddd; text-align: center; font-size: 8pt; color: #999; }
+    @media screen and (max-width: 768px) {
+      @page { size: A4 portrait; margin: 8mm 5mm; }
+      .document { padding: 10px; }
+      .doc-header h1 { font-size: 15pt; }
+      .doc-meta { font-size: 9pt; flex-direction: column; }
+      .summary-bar { flex-direction: column; }
+      .audit-table { font-size: 8pt; }
+      .audit-table th, .audit-table td { padding: 3px 2px; }
+      .check { font-size: 12pt; }
+      .notes { min-width: 60px; }
+      .w40, .w50, .w70, .w80 { width: auto; }
+      .signature-section { flex-direction: column; gap: 20px; }
+      .sig-box .sig-line { width: 140px; }
+      body { font-size: 10pt; }
+    }
+  </style>
+</head>
+<body>
+  <div class="document">
+    <div class="doc-header">
+      <h1>แบบตรวจนับครุภัณฑ์ประจำปี</h1>
+      <div class="subtitle">ปีงบประมาณ ${data.auditYear}</div>
+    </div>
+    <div class="doc-meta">
+      <span>📂 <strong>หน่วยงาน:</strong> ${data.organizationName || '_____________________'}</span>
+      <span>📍 <strong>จุดตรวจ:</strong> ${data.filterLabel}</span>
+      <span>📅 <strong>วันที่พิมพ์:</strong> ${data.printDate}</span>
+    </div>
+    <div class="summary-bar">
+      <div class="summary-card sc-total">
+        <span class="num">${data.totalAssets}</span>
+        <span class="label">รายการทั้งหมด</span>
+      </div>
+      <div class="summary-card sc-groups">
+        <span class="num">${data.groups.length}</span>
+        <span class="label">จุดตรวจ</span>
+      </div>
+    </div>
+    ${groupsHtml}
+    <div class="signature-section">
+      <div class="sig-box">
+        <div class="sig-label">ลงชื่อ ผู้ตรวจ</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">(__________________________)</div>
+        <div class="sig-label">วันที่ ___/___/____</div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-label">ลงชื่อ ผู้รับผิดชอบจุดตรวจ</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">(__________________________)</div>
+        <div class="sig-label">วันที่ ___/___/____</div>
+      </div>
+      <div class="sig-box">
+        <div class="sig-label">ลงชื่อ ผู้อนุมัติ</div>
+        <div class="sig-line"></div>
+        <div class="sig-label">(__________________________)</div>
+        <div class="sig-label">วันที่ ___/___/____</div>
+      </div>
+    </div>
+    <div class="footer">
+      เอกสารนี้จัดทำโดยระบบบริหารจัดการครุภัณฑ์ POWERED BY PNG TEAM | วันที่จัดทำ: ${now}
+    </div>
+  </div>
+</body>
+</html>`;
+}

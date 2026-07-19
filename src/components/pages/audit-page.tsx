@@ -53,6 +53,8 @@ import {
   ListChecks,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { generateAuditWorksheetHtml } from '@/lib/pdf-templates';
+import { generatePdfFromHtml } from '@/lib/pdf-client';
 
 // ─── Constants ──────────────────────────────────────────────────────────────
 
@@ -132,6 +134,9 @@ export function AuditPage() {
   const [scanSubmitting, setScanSubmitting] = useState(false);
   const [scanNotes, setScanNotes] = useState('');
   const scanInputRef = useRef<HTMLInputElement>(null);
+
+  // ── State: Print Worksheet ──
+  const [worksheetLoading, setWorksheetLoading] = useState(false);
 
   // ── State: New Audit Dialog ──
   const [showNewAuditDialog, setShowNewAuditDialog] = useState(false);
@@ -367,6 +372,68 @@ export function AuditPage() {
     });
   };
 
+  // ── Print Audit Worksheet ──
+  const handlePrintWorksheet = async () => {
+    setWorksheetLoading(true);
+    try {
+      // Fetch ALL assets for the selected year (no pagination)
+      const params = new URLSearchParams({
+        year: String(selectedYear),
+        page: '1',
+        limit: '9999',
+      });
+      const res = await fetch(`/api/audit?${params}`);
+      if (!res.ok) throw new Error('Failed to fetch');
+      const data = await res.json();
+      const allRecords: AuditRecord[] = data.records || [];
+
+      if (allRecords.length === 0) {
+        toast({ title: 'ไม่พบข้อมูล', description: 'ไม่มีครุภัณฑ์ในปีที่เลือก', variant: 'destructive' });
+        return;
+      }
+
+      // Group by location
+      const locationMap = new Map<string, AuditRecord[]>();
+      for (const r of allRecords) {
+        const loc = r.asset?.location || 'ไม่ระบุสถานที่';
+        if (!locationMap.has(loc)) locationMap.set(loc, []);
+        locationMap.get(loc)!.push(r);
+      }
+
+      let no = 0;
+      const groups = Array.from(locationMap.entries()).map(([location, records]) => ({
+        location,
+        assets: records.map((r) => ({
+          no: ++no,
+          sku: r.asset?.sku || '-',
+          name: r.asset?.name || '-',
+          category: r.asset?.category?.name || '-',
+          location: r.asset?.location || '-',
+          currentValue: r.asset?.currentValue ?? 0,
+        })),
+      }));
+
+      const html = generateAuditWorksheetHtml({
+        auditYear: selectedYear,
+        printDate: new Date().toLocaleDateString('th-TH', { year: 'numeric', month: 'long', day: 'numeric' }),
+        filterLabel: `ทั้งหมด (${allRecords.length} รายการ)`,
+        groups,
+        totalAssets: allRecords.length,
+      });
+
+      await generatePdfFromHtml(html, `แบบตรวจนับ_พศ_${selectedYear}`);
+      toast({ title: 'สำเร็จ', description: `แบบตรวจนับ ${groups.length} จุด, ${allRecords.length} รายการ` });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้างแบบตรวจนับได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setWorksheetLoading(false);
+    }
+  };
+
   // ─── Computed ─────────────────────────────────────────────────────────────
 
   const checkedPercent = summary.totalAssets > 0
@@ -420,6 +487,19 @@ export function AuditPage() {
               เริ่มตรวจนับปีใหม่
             </Button>
           )}
+          <Button
+            onClick={handlePrintWorksheet}
+            disabled={worksheetLoading}
+            variant="outline"
+            className="border-blue-300 text-blue-700 hover:bg-blue-50"
+          >
+            {worksheetLoading ? (
+              <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+            ) : (
+              <ListChecks className="h-4 w-4 mr-2" />
+            )}
+            พิมพ์แบบตรวจนับ
+          </Button>
         </div>
       </div>
 
