@@ -13,8 +13,12 @@ import {
   DollarSign,
   Loader2,
   BarChart3,
+  ClipboardList,
+  FileX2,
 } from 'lucide-react';
 import { useToast } from '@/hooks/use-toast';
+import { generateBorrowFormHtml, generateWriteoffFormHtml } from '@/lib/pdf-templates';
+import { generatePdfFromHtml } from '@/lib/pdf-client';
 import * as XLSX from 'xlsx';
 import { jsPDF } from 'jspdf';
 
@@ -27,6 +31,7 @@ export function ReportsPage() {
   const [exporting, setExporting] = useState<string | null>(null);
   const [calcResult, setCalcResult] = useState<string | null>(null);
   const [calculating, setCalculating] = useState(false);
+  const [formPdfLoading, setFormPdfLoading] = useState<string | null>(null);
 
   useEffect(() => {
     const fetchSummary = async () => {
@@ -235,6 +240,132 @@ export function ReportsPage() {
       toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถคำนวณค่าเสื่อมราคาได้', variant: 'destructive' });
     } finally {
       setCalculating(false);
+    }
+  };
+
+  const handleGenerateBorrowFormPdf = async () => {
+    setFormPdfLoading('borrow');
+    try {
+      const res = await fetch('/api/borrow?status=APPROVED,RETURNED,OVERDUE&limit=100');
+      if (!res.ok) throw new Error('Failed to fetch borrow records');
+      const data = await res.json();
+      const records: Array<Record<string, unknown>> = data.records || [];
+
+      if (records.length === 0) {
+        toast({ title: 'ไม่พบข้อมูล', description: 'ไม่มีรายการยืมที่อนุมัติ/คืนแล้ว/เกินกำหนด', variant: 'destructive' });
+        return;
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const allHtmlParts: string[] = [];
+      const reasonLabels: Record<string, string> = {
+        DAMAGED: 'ชำรุด', LOST: 'สูญหาย', DEPRECIATED: 'เสื่อมสภาพ', OTHER: 'อื่นๆ',
+      };
+
+      records.forEach((rec) => {
+        const user = rec.user as Record<string, string> | undefined;
+        const asset = rec.asset as Record<string, unknown> | undefined;
+        const category = asset?.category as Record<string, string> | undefined;
+        const approvedBy = rec.approvedBy as Record<string, string> | null | undefined;
+
+        if (!asset) return;
+
+        allHtmlParts.push(generateBorrowFormHtml({
+          borrowerName: user?.name || '-',
+          borrowerDepartment: user?.department || '-',
+          borrowDate: String(rec.borrowDate || ''),
+          expectedReturnDate: String(rec.expectedReturnDate || ''),
+          actualReturnDate: rec.actualReturnDate ? String(rec.actualReturnDate) : undefined,
+          status: String(rec.status || ''),
+          notes: rec.notes ? String(rec.notes) : undefined,
+          approvedByName: approvedBy?.name || undefined,
+          assets: [{
+            sku: String(asset.sku || ''),
+            name: String(asset.name || ''),
+            categoryName: category?.name || '-',
+            currentValue: Number(asset.currentValue || 0),
+            location: String(asset.location || '-'),
+          }],
+        }));
+      });
+
+      if (allHtmlParts.length === 0) {
+        toast({ title: 'ไม่พบข้อมูล', description: 'ไม่มีข้อมูลครุภัณฑ์สำหรับสร้าง PDF', variant: 'destructive' });
+        return;
+      }
+
+      const combinedHtml = allHtmlParts.join('<div style="page-break-after: always;"></div>');
+      await generatePdfFromHtml(combinedHtml, `แบบฟอร์มยืมครุภัณฑ์_${dateStr}`);
+      toast({ title: 'สำเร็จ', description: `สร้าง PDF แบบฟอร์มยืมครุภัณฑ์ ${allHtmlParts.length} รายการเรียบร้อย` });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้าง PDF ได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setFormPdfLoading(null);
+    }
+  };
+
+  const handleGenerateWriteoffFormPdf = async () => {
+    setFormPdfLoading('writeoff');
+    try {
+      const res = await fetch('/api/writeoff?status=APPROVED&limit=100');
+      if (!res.ok) throw new Error('Failed to fetch writeoff records');
+      const data = await res.json();
+      const records: Array<Record<string, unknown>> = data.records || [];
+
+      if (records.length === 0) {
+        toast({ title: 'ไม่พบข้อมูล', description: 'ไม่มีรายการตัดจำหน่ายที่อนุมัติแล้ว', variant: 'destructive' });
+        return;
+      }
+
+      const dateStr = new Date().toISOString().split('T')[0];
+      const allHtmlParts: string[] = [];
+      const reasonLabels: Record<string, string> = {
+        DAMAGED: 'ชำรุด', LOST: 'สูญหาย', DEPRECIATED: 'เสื่อมสภาพ', OTHER: 'อื่นๆ',
+      };
+
+      records.forEach((rec) => {
+        const asset = rec.asset as Record<string, unknown> | undefined;
+        const category = asset?.category as Record<string, string> | undefined;
+        const approvedBy = rec.approvedBy as Record<string, string> | null | undefined;
+
+        if (!asset) return;
+
+        const reason = String(rec.reason || '');
+        allHtmlParts.push(generateWriteoffFormHtml({
+          assetSku: String(asset.sku || '-'),
+          assetName: String(asset.name || '-'),
+          categoryName: category?.name || '-',
+          purchasePrice: Number(asset.purchasePrice || 0),
+          currentValue: Number(asset.currentValue || 0),
+          purchaseDate: String(asset.purchaseDate || '-'),
+          reason,
+          reasonLabel: reasonLabels[reason] || reason,
+          description: String(rec.description || '-'),
+          date: String(rec.date || ''),
+          approvedByName: approvedBy?.name || undefined,
+        }));
+      });
+
+      if (allHtmlParts.length === 0) {
+        toast({ title: 'ไม่พบข้อมูล', description: 'ไม่มีข้อมูลครุภัณฑ์สำหรับสร้าง PDF', variant: 'destructive' });
+        return;
+      }
+
+      const combinedHtml = allHtmlParts.join('<div style="page-break-after: always;"></div>');
+      await generatePdfFromHtml(combinedHtml, `แบบฟอร์มตัดจำหน่าย_${dateStr}`);
+      toast({ title: 'สำเร็จ', description: `สร้าง PDF แบบฟอร์มตัดจำหน่าย ${allHtmlParts.length} รายการเรียบร้อย` });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้าง PDF ได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setFormPdfLoading(null);
     }
   };
 
@@ -447,6 +578,66 @@ export function ReportsPage() {
               {calcResult && (
                 <p className="text-sm text-emerald-600 dark:text-emerald-400">{calcResult}</p>
               )}
+            </CardContent>
+          </Card>
+
+          {/* Card 5: Borrow Form PDF */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-teal-100 dark:bg-teal-900/50">
+                  <ClipboardList className="h-5 w-5 text-teal-600 dark:text-teal-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">พิมพ์แบบฟอร์มยืมครุภัณฑ์</CardTitle>
+                  <CardDescription>สร้างไฟล์ PDF แบบฟอร์มยืมครุภัณฑ์สำหรับระเบียบ</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleGenerateBorrowFormPdf}
+                disabled={formPdfLoading === 'borrow'}
+              >
+                {formPdfLoading === 'borrow' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 text-teal-600" />
+                )}
+                สร้าง PDF
+              </Button>
+            </CardContent>
+          </Card>
+
+          {/* Card 6: Writeoff Form PDF */}
+          <Card>
+            <CardHeader className="pb-3">
+              <div className="flex items-center gap-3">
+                <div className="p-2 rounded-lg bg-red-100 dark:bg-red-900/50">
+                  <FileX2 className="h-5 w-5 text-red-600 dark:text-red-400" />
+                </div>
+                <div>
+                  <CardTitle className="text-base">พิมพ์แบบฟอร์มตัดจำหน่าย</CardTitle>
+                  <CardDescription>สร้างไฟล์ PDF แบบฟอร์มตัดจำหน่ายครุภัณฑ์</CardDescription>
+                </div>
+              </div>
+            </CardHeader>
+            <CardContent>
+              <Button
+                variant="outline"
+                className="gap-2"
+                onClick={handleGenerateWriteoffFormPdf}
+                disabled={formPdfLoading === 'writeoff'}
+              >
+                {formPdfLoading === 'writeoff' ? (
+                  <Loader2 className="h-4 w-4 animate-spin" />
+                ) : (
+                  <FileText className="h-4 w-4 text-red-600" />
+                )}
+                สร้าง PDF
+              </Button>
             </CardContent>
           </Card>
         </div>

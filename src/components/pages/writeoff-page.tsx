@@ -39,9 +39,12 @@ import {
   Check,
   X,
   Loader2,
+  FileText,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
+import { generateWriteoffFormHtml } from '@/lib/pdf-templates';
+import { generatePdfFromHtml } from '@/lib/pdf-client';
 
 const STATUS_BADGE: Record<WriteoffStatus, string> = {
   PENDING: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -75,6 +78,7 @@ export function WriteoffPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
   // Filters
   const [page, setPage] = useState(1);
@@ -188,6 +192,42 @@ export function WriteoffPage() {
     }
   };
 
+  const handlePrintWriteoff = async (record: WriteoffRecord) => {
+    setPdfLoading(record.id);
+    try {
+      const reasonLabels: Record<string, string> = {
+        DAMAGED: 'ชำรุด',
+        LOST: 'สูญหาย',
+        DEPRECIATED: 'เสื่อมสภาพ',
+        OTHER: 'อื่นๆ',
+      };
+      const html = generateWriteoffFormHtml({
+        assetSku: record.asset?.sku || '-',
+        assetName: record.asset?.name || '-',
+        categoryName: record.asset?.category?.name || '-',
+        purchasePrice: record.asset?.purchasePrice ?? 0,
+        currentValue: record.asset?.currentValue ?? 0,
+        purchaseDate: record.asset?.purchaseDate || '-',
+        reason: record.reason,
+        reasonLabel: reasonLabels[record.reason] || record.reason,
+        description: record.description,
+        date: record.date,
+        approvedByName: record.approvedBy?.name || undefined,
+      });
+      const filename = `รายงานตัดจำหน่าย_${record.asset?.sku || record.id}_${format(new Date(record.date), 'yyyy-MM-dd')}`;
+      await generatePdfFromHtml(html, filename);
+      toast({ title: 'สำเร็จ', description: 'ดาวน์โหลดรายงานตัดจำหน่ายเรียบร้อย' });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้าง PDF ได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -291,34 +331,52 @@ export function WriteoffPage() {
                       </TableCell>
                       {isStaffOrAdmin && (
                         <TableCell className="text-right">
-                          {record.status === 'PENDING' && (
-                            <div className="flex items-center justify-end gap-1">
+                          <div className="flex items-center justify-end gap-1">
+                            {record.status === 'APPROVED' && (
                               <Button
                                 size="sm"
-                                variant="outline"
-                                className="text-red-700 border-red-300 hover:bg-red-50 h-8 px-2"
-                                onClick={() => handleAction(record.id, 'approve')}
-                                disabled={actionLoading === record.id}
+                                variant="ghost"
+                                className="h-8 px-2 text-gray-600 hover:text-gray-900"
+                                onClick={() => handlePrintWriteoff(record)}
+                                disabled={pdfLoading === record.id}
+                                title="พิมพ์รายงาน"
                               >
-                                {actionLoading === record.id ? (
+                                {pdfLoading === record.id ? (
                                   <Loader2 className="h-3 w-3 animate-spin" />
                                 ) : (
-                                  <Check className="h-3 w-3 mr-1" />
+                                  <FileText className="h-3 w-3" />
                                 )}
-                                อนุมัติ
                               </Button>
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-gray-700 border-gray-300 hover:bg-gray-50 h-8 px-2"
-                                onClick={() => handleAction(record.id, 'reject')}
-                                disabled={actionLoading === record.id}
-                              >
-                                <X className="h-3 w-3 mr-1" />
-                                ปฏิเสธ
-                              </Button>
-                            </div>
-                          )}
+                            )}
+                            {record.status === 'PENDING' && (
+                              <>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-red-700 border-red-300 hover:bg-red-50 h-8 px-2"
+                                  onClick={() => handleAction(record.id, 'approve')}
+                                  disabled={actionLoading === record.id}
+                                >
+                                  {actionLoading === record.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <Check className="h-3 w-3 mr-1" />
+                                  )}
+                                  อนุมัติ
+                                </Button>
+                                <Button
+                                  size="sm"
+                                  variant="outline"
+                                  className="text-gray-700 border-gray-300 hover:bg-gray-50 h-8 px-2"
+                                  onClick={() => handleAction(record.id, 'reject')}
+                                  disabled={actionLoading === record.id}
+                                >
+                                  <X className="h-3 w-3 mr-1" />
+                                  ปฏิเสธ
+                                </Button>
+                              </>
+                            )}
+                          </div>
                         </TableCell>
                       )}
                     </TableRow>

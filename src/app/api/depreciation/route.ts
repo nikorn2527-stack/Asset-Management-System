@@ -4,7 +4,7 @@ import { NextResponse } from 'next/server';
 export async function POST() {
   try {
     const assets = await db.asset.findMany({
-      where: { status: { not: 'WRITEOFF' }, deletedAt: null },
+      where: { status: { not: 'WRITEOFF' } },
     });
 
     const now = new Date();

@@ -42,11 +42,12 @@ import {
   X,
   RotateCcw,
   Loader2,
-  Printer,
+  FileText,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { useToast } from '@/hooks/use-toast';
-import { printBorrowReturnForm } from '@/components/borrow-return-pdf';
+import { generateBorrowFormHtml, generateReturnFormHTML } from '@/lib/pdf-templates';
+import { generatePdfFromHtml } from '@/lib/pdf-client';
 
 const STATUS_BADGE: Record<BorrowStatus, string> = {
   PENDING: 'bg-amber-100 text-amber-800 border-amber-200',
@@ -77,6 +78,7 @@ export function BorrowPage() {
   const [total, setTotal] = useState(0);
   const [loading, setLoading] = useState(true);
   const [actionLoading, setActionLoading] = useState<string | null>(null);
+  const [pdfLoading, setPdfLoading] = useState<string | null>(null);
 
   // Filters
   const [page, setPage] = useState(1);
@@ -203,6 +205,58 @@ export function BorrowPage() {
     }
   };
 
+  const handlePrintBorrow = async (record: BorrowRecord) => {
+    setPdfLoading(record.id);
+    try {
+      const html = generateBorrowFormHtml({
+        borrowerName: record.user?.name || '-',
+        borrowerDepartment: record.user?.department || '-',
+        borrowDate: record.borrowDate,
+        expectedReturnDate: record.expectedReturnDate,
+        actualReturnDate: record.actualReturnDate || undefined,
+        status: record.status,
+        notes: record.notes || undefined,
+        approvedByName: record.approvedBy?.name || undefined,
+        assets: record.asset ? [{
+          sku: record.asset.sku,
+          name: record.asset.name,
+          categoryName: record.asset.category?.name || '-',
+          currentValue: record.asset.currentValue,
+          location: record.asset.location || '-',
+        }] : [],
+      });
+      const filename = `ใบยืม_${record.asset?.sku || record.id}_${format(new Date(record.borrowDate), 'yyyy-MM-dd')}`;
+      await generatePdfFromHtml(html, filename);
+      toast({ title: 'สำเร็จ', description: 'ดาวน์โหลดใบยืมครุภัณฑ์เรียบร้อย' });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้าง PDF ได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
+  const handlePrintReturn = async (record: BorrowRecord) => {
+    setPdfLoading(record.id);
+    try {
+      const html = generateReturnFormHTML({ record });
+      const filename = `ใบคืน_${record.asset?.sku || record.id}_${format(new Date(record.borrowDate), 'yyyy-MM-dd')}`;
+      await generatePdfFromHtml(html, filename);
+      toast({ title: 'สำเร็จ', description: 'ดาวน์โหลดใบคืนครุภัณฑ์เรียบร้อย' });
+    } catch (err) {
+      toast({
+        title: 'เกิดข้อผิดพลาด',
+        description: err instanceof Error ? err.message : 'ไม่สามารถสร้าง PDF ได้',
+        variant: 'destructive',
+      });
+    } finally {
+      setPdfLoading(null);
+    }
+  };
+
   return (
     <div className="space-y-6">
       {/* Header */}
@@ -292,38 +346,54 @@ export function BorrowPage() {
                           </TableCell>
                           <TableCell className="text-right">
                             <div className="flex items-center justify-end gap-1">
-                              <Button
-                                size="sm"
-                                variant="outline"
-                                className="text-gray-600 border-gray-300 hover:bg-gray-50 h-8 px-2"
-                                onClick={() => {
-                                  if (!record.asset || !record.user) return;
-                                  printBorrowReturnForm({
-                                    id: record.id,
-                                    borrowDate: record.borrowDate,
-                                    expectedReturnDate: record.expectedReturnDate,
-                                    actualReturnDate: record.actualReturnDate,
-                                    notes: record.notes,
-                                    status: record.status,
-                                    asset: {
-                                      sku: record.asset.sku,
-                                      name: record.asset.name,
-                                      category: record.asset.category ? { name: record.asset.category.name } : undefined,
-                                      location: record.asset.location,
-                                      purchasePrice: record.asset.purchasePrice,
-                                    },
-                                    user: {
-                                      name: record.user.name,
-                                      department: record.user.department,
-                                      phone: record.user.phone,
-                                    },
-                                    approvedBy: record.approvedBy ? { name: record.approvedBy.name } : undefined,
-                                  });
-                                }}
-                              >
-                                <Printer className="h-3 w-3 mr-1" />
-                                พิมพ์
-                              </Button>
+                              {(record.status === 'APPROVED' || record.status === 'OVERDUE') && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-gray-600 hover:text-gray-900"
+                                  onClick={() => handlePrintBorrow(record)}
+                                  disabled={pdfLoading === record.id}
+                                  title="พิมพ์ใบยืม"
+                                >
+                                  {pdfLoading === record.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <FileText className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
+                              {record.status === 'RETURNED' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-gray-600 hover:text-gray-900"
+                                  onClick={() => handlePrintBorrow(record)}
+                                  disabled={pdfLoading === record.id}
+                                  title="พิมพ์ใบยืม"
+                                >
+                                  {pdfLoading === record.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <FileText className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
+                              {record.status === 'RETURNED' && (
+                                <Button
+                                  size="sm"
+                                  variant="ghost"
+                                  className="h-8 px-2 text-teal-600 hover:text-teal-900"
+                                  onClick={() => handlePrintReturn(record)}
+                                  disabled={pdfLoading === record.id}
+                                  title="พิมพ์ใบคืน"
+                                >
+                                  {pdfLoading === record.id ? (
+                                    <Loader2 className="h-3 w-3 animate-spin" />
+                                  ) : (
+                                    <RotateCcw className="h-3 w-3" />
+                                  )}
+                                </Button>
+                              )}
                               {isStaffOrAdmin && record.status === 'PENDING' && (
                                 <>
                                   <Button

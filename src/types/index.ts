@@ -6,6 +6,7 @@ export type MaintenanceStatus = 'IN_PROGRESS' | 'COMPLETED';
 export type WriteoffReason = 'DAMAGED' | 'LOST' | 'DEPRECIATED' | 'OTHER';
 export type WriteoffStatus = 'PENDING' | 'APPROVED' | 'REJECTED';
 export type NotificationType = 'INFO' | 'WARNING' | 'ERROR' | 'SUCCESS';
+export type AuditStatus = 'NOT_CHECKED' | 'FOUND_NORMAL' | 'FOUND_DAMAGED' | 'MISSING';
 
 export interface User {
   id: string;
@@ -73,7 +74,6 @@ export interface MaintenanceLog {
   cost: number;
   status: MaintenanceStatus;
   date: string;
-  completedDate: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -92,18 +92,17 @@ export interface WriteoffRecord {
   updatedAt: string;
 }
 
-export type AuditResult = 'FOUND_NORMAL' | 'FOUND_DAMAGED' | 'MISSING';
-
-export interface AuditLog {
+export interface AuditRecord {
   id: string;
+  auditYear: number;
   assetId: string;
   asset?: Asset;
-  userId: string | null;
-  user?: User | null;
-  auditResult: AuditResult;
+  auditorId: string | null;
+  auditor?: User | null;
+  status: AuditStatus;
   notes: string | null;
-  location: string | null;
   createdAt: string;
+  updatedAt: string;
 }
 
 export interface Notification {

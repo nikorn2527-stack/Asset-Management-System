@@ -137,19 +137,70 @@
   background-color: oklch(0.7 0.02 155);
 }
 
-/* Print styles for thermal label printing */
+/* ==========================================
+   Thermal Label Print Styles
+   ========================================== */
+
+/* Default @page for thermal labels */
+@page {
+  size: 70mm 24mm;
+  margin: 0;
+}
+
 @media print {
-  body * {
-    visibility: hidden !important;
+  /* Hide everything except the print area */
+  body {
+    margin: 0 !important;
+    padding: 0 !important;
+    background: white !important;
   }
-  .print-area,
-  .print-area * {
-    visibility: visible !important;
+
+  body > *:not(.print-area) {
+    display: none !important;
   }
+
+  /* Show only the print overlay */
   .print-area {
-    position: absolute;
-    left: 0;
-    top: 0;
-    width: 100%;
+    display: block !important;
+    position: static !important;
+    z-index: auto !important;
+    background: white !important;
   }
+
+  /* Hide preview toolbar and preview labels */
+  .print-area .non-printable {
+    display: none !important;
+  }
+
+  /* Show the print-only label container */
+  .print-only-labels {
+    display: block !important;
+  }
+
+  /* Label styling for print */
+  .thermal-label {
+    width: 70mm !important;
+    height: 24mm !important;
+    box-sizing: border-box !important;
+    page-break-after: always !important;
+    break-after: page !important;
+    break-inside: avoid !important;
+    overflow: hidden !important;
+    padding: 2mm 2.5mm !important;
+  }
+
+  .thermal-label:last-child {
+    page-break-after: auto !important;
+    break-after: auto !important;
+  }
+
+  /* Reset any inherited shadows/borders for print */
+  .thermal-label * {
+    box-shadow: none !important;
+  }
+}
+
+/* 80x36mm variant */
+@media print and (prefers-reduced-data: no-preference) {
+  /* Dynamic @page is injected via inline style in the component */
 }

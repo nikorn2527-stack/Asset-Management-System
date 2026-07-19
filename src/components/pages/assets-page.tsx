@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useMemo } from 'react';
 import QRCode from 'qrcode';
 import type { Asset, AssetCategory, AssetStatus, BorrowRecord, MaintenanceLog } from '@/types';
 import { useAuthStore } from '@/store';
@@ -9,7 +9,6 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { ScrollArea } from '@/components/ui/scroll-area';
@@ -59,12 +58,15 @@ import {
   Calendar,
   MapPin,
   Shield,
+  Upload,
   Printer,
 } from 'lucide-react';
+import { Checkbox } from '@/components/ui/checkbox';
+import { BulkUploadDialog } from '@/components/bulk-upload-dialog';
+import { ThermalLabelPrintView, type LabelSize } from '@/components/thermal-label-print-view';
 import { format } from 'date-fns';
 import { th } from 'date-fns/locale';
 import { useToast } from '@/hooks/use-toast';
-import { ThermalLabelPrintView } from '@/components/thermal-label-print-view';
 
 const STATUS_LABELS: Record<AssetStatus, string> = {
   AVAILABLE: 'พร้อมใช้งาน',
@@ -122,6 +124,32 @@ export function AssetsPage() {
   const currentUser = useAuthStore((s) => s.currentUser);
   const { toast } = useToast();
   const canManage = currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF';
+  const [showBulkUpload, setShowBulkUpload] = useState(false);
+
+  // Selection state for label printing
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showPrintView, setShowPrintView] = useState(false);
+  const [labelSize, setLabelSize] = useState<LabelSize>('70x24');
+
+  const toggleSelect = (id: string) => {
+    setSelectedIds((prev) => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id); else next.add(id);
+      return next;
+    });
+  };
+
+  const toggleSelectAll = () => {
+    if (selectedIds.size === assets.length) {
+      setSelectedIds(new Set());
+    } else {
+      setSelectedIds(new Set(assets.map((a) => a.id)));
+    }
+  };
+
+  const triggerPrint = useCallback(() => {
+    window.print();
+  }, []);
 
   // List state
   const [assets, setAssets] = useState<Asset[]>([]);
@@ -145,40 +173,6 @@ export function AssetsPage() {
   const [qrUrl, setQrUrl] = useState('');
   const [deleteLoading, setDeleteLoading] = useState(false);
 
-  // Label print state
-  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
-  const [showLabelPrint, setShowLabelPrint] = useState(false);
-
-  const toggleSelect = (id: string) => {
-    setSelectedIds((prev) => {
-      const next = new Set(prev);
-      if (next.has(id)) next.delete(id);
-      else next.add(id);
-      return next;
-    });
-  };
-
-  const toggleSelectAll = () => {
-    if (selectedIds.size === assets.length) {
-      setSelectedIds(new Set());
-    } else {
-      setSelectedIds(new Set(assets.map((a) => a.id)));
-    }
-  };
-
-  const getSelectedAssetsForLabel = () => {
-    return assets
-      .filter((a) => selectedIds.has(a.id))
-      .map((a) => ({
-        sku: a.sku,
-        name: a.name,
-        category: a.category,
-        location: a.location,
-        purchaseDate: a.purchaseDate,
-        currentValue: a.currentValue,
-      }));
-  };
-
   const fetchAssets = useCallback(async () => {
     setLoading(true);
     try {
@@ -201,6 +195,19 @@ export function AssetsPage() {
     }
   }, [search, filterCategory, filterStatus, page, toast]);
 
+  const selectedAssets = useMemo(() => {
+    if (!showPrintView) return [];
+    return assets.filter((a) => selectedIds.has(a.id));
+  }, [assets, selectedIds, showPrintView]);
+
+  const handlePrintLabels = () => {
+    if (selectedIds.size === 0) {
+      toast({ title: 'กรุณาเลือกครุภัณฑ์', description: 'เลือกอย่างน้อย 1 รายการเพื่อพิมพ์ฉลาก', variant: 'destructive' });
+      return;
+    }
+    setShowPrintView(true);
+  };
+
   const fetchCategories = async () => {
     try {
       const res = await fetch('/api/categories');
@@ -219,9 +226,10 @@ export function AssetsPage() {
     fetchAssets();
   }, [fetchAssets]);
 
-  // Reset page on filter change
+  // Reset page and selection on filter change
   useEffect(() => {
     setPage(1);
+    setSelectedIds(new Set());
   }, [search, filterCategory, filterStatus]);
 
   const openCreateForm = () => {
@@ -324,23 +332,28 @@ export function AssetsPage() {
           <h2 className="text-xl font-bold">ครุภัณฑ์ทั้งหมด</h2>
           <p className="text-sm text-muted-foreground">ทั้งหมด {total} รายการ</p>
         </div>
-        <div className="flex items-center gap-2 shrink-0">
+        <div className="flex items-center gap-2 flex-wrap">
           {selectedIds.size > 0 && (
             <Button
-              variant="outline"
-              size="sm"
-              className="border-emerald-300 text-emerald-700 hover:bg-emerald-50"
-              onClick={() => setShowLabelPrint(true)}
+              variant="default"
+              onClick={handlePrintLabels}
+              className="bg-teal-600 hover:bg-teal-700 text-white"
             >
               <Printer className="h-4 w-4 mr-2" />
               พิมพ์ฉลาก ({selectedIds.size})
             </Button>
           )}
           {canManage && (
-            <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white">
-              <Plus className="h-4 w-4 mr-2" />
-              เพิ่มครุภัณฑ์
-            </Button>
+            <>
+              <Button variant="outline" onClick={() => setShowBulkUpload(true)}>
+                <Upload className="h-4 w-4 mr-2" />
+                อัปโหลดหลายรายการ
+              </Button>
+              <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
+                <Plus className="h-4 w-4 mr-2" />
+                เพิ่มครุภัณฑ์
+              </Button>
+            </>
           )}
         </div>
       </div>
@@ -388,7 +401,7 @@ export function AssetsPage() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead className="w-10">
+                  <TableHead className="w-10 pl-4">
                     <Checkbox
                       checked={assets.length > 0 && selectedIds.size === assets.length}
                       onCheckedChange={toggleSelectAll}
@@ -425,8 +438,8 @@ export function AssetsPage() {
                   </TableRow>
                 ) : (
                   assets.map((asset) => (
-                    <TableRow key={asset.id} className={"group" + (selectedIds.has(asset.id) ? ' bg-emerald-50/50' : '')}>
-                      <TableCell>
+                    <TableRow key={asset.id} className={`${selectedIds.has(asset.id) ? 'bg-emerald-50/50' : ''} group`}>
+                      <TableCell className="pl-4">
                         <Checkbox
                           checked={selectedIds.has(asset.id)}
                           onCheckedChange={() => toggleSelect(asset.id)}
@@ -823,11 +836,22 @@ export function AssetsPage() {
         </AlertDialogContent>
       </AlertDialog>
 
+      {showBulkUpload && (
+        <BulkUploadDialog
+          open={showBulkUpload}
+          onOpenChange={setShowBulkUpload}
+          onSuccess={() => { fetchAssets(); }}
+        />
+      )}
+
       {/* Thermal Label Print View */}
-      {showLabelPrint && getSelectedAssetsForLabel().length > 0 && (
+      {showPrintView && (
         <ThermalLabelPrintView
-          assets={getSelectedAssetsForLabel()}
-          onClose={() => setShowLabelPrint(false)}
+          assets={selectedAssets}
+          labelSize={labelSize}
+          onLabelSizeChange={setLabelSize}
+          onClose={() => setShowPrintView(false)}
+          onPrint={triggerPrint}
         />
       )}
     </div>

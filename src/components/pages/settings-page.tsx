@@ -143,8 +143,8 @@ export function SettingsPage() {
               <p className="font-medium">1.0.0</p>
             </div>
             <div className="space-y-1">
-              <p className="text-sm text-muted-foreground">ผู้พัฒนา</p>
-              <p className="font-medium">Asset Management Team</p>
+              <p className="text-sm text-muted-foreground">POWERED BY</p>
+              <p className="font-medium">PNG TEAM</p>
             </div>
             <div className="space-y-1">
               <p className="text-sm text-muted-foreground">เทคโนโลยี</p>

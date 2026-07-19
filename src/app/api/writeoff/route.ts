@@ -37,11 +37,6 @@ export async function POST(request: NextRequest) {
       return NextResponse.json({ error: 'Missing required fields' }, { status: 400 });
     }
 
-    const asset = await db.asset.findFirst({ where: { id: assetId, deletedAt: null } });
-    if (!asset) {
-      return NextResponse.json({ error: 'Asset not found' }, { status: 404 });
-    }
-
     const record = await db.writeoffRecord.create({
       data: { assetId, reason, description, status: 'PENDING' },
       include: { asset: true },

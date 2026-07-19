@@ -8,7 +8,6 @@ export async function GET(request: NextRequest) {
 
     if (type === 'assets') {
       const assets = await db.asset.findMany({
-        where: { deletedAt: null },
         include: { category: true },
         orderBy: { createdAt: 'desc' },
       });
@@ -17,7 +16,7 @@ export async function GET(request: NextRequest) {
 
     if (type === 'depreciation') {
       const assets = await db.asset.findMany({
-        where: { status: { not: 'WRITEOFF' }, deletedAt: null },
+        where: { status: { not: 'WRITEOFF' } },
         include: { category: true },
         orderBy: { purchaseDate: 'asc' },
       });
