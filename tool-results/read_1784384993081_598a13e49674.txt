@@ -1,0 +1,1049 @@
+     1→import type { BorrowRecord, WriteoffRecord } from '@/types';
+     2→
+     3→// ─── New V2 Template Interfaces ─────────────────────────────────────────────
+     4→
+     5→export interface BorrowFormTemplateData {
+     6→  documentNumber?: string;
+     7→  organizationName?: string;
+     8→  borrowerName: string;
+     9→  borrowerDepartment: string;
+    10→  borrowDate: string;
+    11→  expectedReturnDate: string;
+    12→  actualReturnDate?: string;
+    13→  status: string;
+    14→  notes?: string;
+    15→  approvedByName?: string;
+    16→  assets: Array<{
+    17→    sku: string;
+    18→    name: string;
+    19→    categoryName: string;
+    20→    currentValue: number;
+    21→    location: string;
+    22→  }>;
+    23→}
+    24→
+    25→export interface WriteoffFormTemplateData {
+    26→  documentNumber?: string;
+    27→  organizationName?: string;
+    28→  assetSku: string;
+    29→  assetName: string;
+    30→  categoryName: string;
+    31→  purchasePrice: number;
+    32→  currentValue: number;
+    33→  purchaseDate: string;
+    34→  reason: string;
+    35→  reasonLabel: string;
+    36→  description: string;
+    37→  date: string;
+    38→  approvedByName?: string;
+    39→}
+    40→
+    41→// ─── New V2 Template Styles ─────────────────────────────────────────────────
+    42→
+    43→const NOTO_FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Noto+Sans+Thai:wght@300;400;500;600;700&family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">';
+    44→
+    45→const FORM_V2_STYLES = `
+    46→  @page {
+    47→    size: A4;
+    48→    margin: 20mm 15mm 20mm 15mm;
+    49→  }
+    50→  @media print {
+    51→    body { -webkit-print-color-adjust: exact; print-color-adjust: exact; }
+    52→    .no-print { display: none !important; }
+    53→  }
+    54→  * { margin: 0; padding: 0; box-sizing: border-box; }
+    55→  body {
+    56→    font-family: 'Noto Sans Thai', 'Sarabun', sans-serif;
+    57→    font-size: 14px;
+    58→    line-height: 1.7;
+    59→    color: #1a1a1a;
+    60→    background: #fff;
+    61→    padding: 0;
+    62→  }
+    63→  .v2-container {
+    64→    max-width: 700px;
+    65→    margin: 0 auto;
+    66→    padding: 0;
+    67→  }
+    68→  .v2-header {
+    69→    border: 2px solid #333;
+    70→    border-bottom: none;
+    71→    padding: 16px 20px;
+    72→    text-align: center;
+    73→  }
+    74→  .v2-header .org-name {
+    75→    font-size: 16px;
+    76→    font-weight: 600;
+    77→    color: #1b5e20;
+    78→    margin-bottom: 6px;
+    79→  }
+    80→  .v2-header h1 {
+    81→    font-size: 20px;
+    82→    font-weight: 700;
+    83→    margin-bottom: 8px;
+    84→  }
+    85→  .v2-header .form-meta {
+    86→    display: flex;
+    87→    justify-content: space-between;
+    88→    font-size: 13px;
+    89→    color: #555;
+    90→  }
+    91→  .v2-header .form-meta .doc-num {
+    92→    font-family: monospace;
+    93→    background: #f5f5f5;
+    94→    padding: 2px 8px;
+    95→    border: 1px solid #ddd;
+    96→    border-radius: 3px;
+    97→    font-size: 12px;
+    98→  }
+    99→  .v2-border-wrap {
+   100→    border: 2px solid #333;
+   101→    border-top: none;
+   102→    padding: 20px;
+   103→  }
+   104→  .v2-section-title {
+   105→    font-size: 14px;
+   106→    font-weight: 700;
+   107→    margin: 18px 0 8px;
+   108→    padding-bottom: 4px;
+   109→    border-bottom: 2px solid #2e7d32;
+   110→    color: #1b5e20;
+   111→  }
+   112→  .v2-section-title:first-child { margin-top: 0; }
+   113→  .v2-table {
+   114→    width: 100%;
+   115→    border-collapse: collapse;
+   116→    margin-bottom: 12px;
+   117→    font-size: 13px;
+   118→  }
+   119→  .v2-table th,
+   120→  .v2-table td {
+   121→    border: 1px solid #333;
+   122→    padding: 7px 10px;
+   123→    text-align: left;
+   124→    vertical-align: top;
+   125→  }
+   126→  .v2-table th {
+   127→    background: #e8f5e9;
+   128→    font-weight: 600;
+   129→    white-space: nowrap;
+   130→    width: 140px;
+   131→    color: #1b5e20;
+   132→  }
+   133→  .v2-table td {
+   134→    color: #333;
+   135→  }
+   136→  .v2-table .header-row th {
+   137→    background: #2e7d32;
+   138→    color: #fff;
+   139→    text-align: center;
+   140→    font-size: 13px;
+   141→    padding: 6px 8px;
+   142→    width: auto;
+   143→  }
+   144→  .v2-table .header-row + tr td {
+   145→    text-align: center;
+   146→  }
+   147→  .v2-table .col-no { width: 40px; text-align: center; }
+   148→  .v2-signature-section {
+   149→    margin-top: 36px;
+   150→    display: flex;
+   151→    justify-content: space-between;
+   152→    page-break-inside: avoid;
+   153→  }
+   154→  .v2-sig-box {
+   155→    text-align: center;
+   156→    width: 30%;
+   157→  }
+   158→  .v2-sig-box .sig-label {
+   159→    font-size: 13px;
+   160→    font-weight: 600;
+   161→    margin-bottom: 50px;
+   162→  }
+   163→  .v2-sig-box .sig-name {
+   164→    border-top: 1px dashed #333;
+   165→    padding-top: 4px;
+   166→    font-size: 13px;
+   167→    font-weight: 600;
+   168→    min-width: 140px;
+   169→    margin: 0 auto;
+   170→  }
+   171→  .v2-sig-box .sig-date {
+   172→    font-size: 11px;
+   173→    color: #666;
+   174→    margin-top: 4px;
+   175→  }
+   176→  .v2-sig-box .sig-role {
+   177→    font-size: 12px;
+   178→    color: #666;
+   179→    margin-top: 2px;
+   180→  }
+   181→  .v2-footer {
+   182→    margin-top: 32px;
+   183→    padding-top: 8px;
+   184→    border-top: 1px solid #ccc;
+   185→    font-size: 11px;
+   186→    color: #888;
+   187→    text-align: center;
+   188→  }
+   189→  .v2-footer .copy-notice {
+   190→    font-style: italic;
+   191→    font-size: 11px;
+   192→    color: #666;
+   193→    margin-bottom: 6px;
+   194→  }
+   195→  .v2-notes-box {
+   196→    background: #fafafa;
+   197→    border: 1px solid #ddd;
+   198→    padding: 10px 12px;
+   199→    margin-bottom: 12px;
+   200→    font-size: 13px;
+   201→  }
+   202→  .v2-notes-box .notes-label {
+   203→    font-weight: 600;
+   204→    color: #555;
+   205→    margin-bottom: 4px;
+   206→  }
+   207→`;
+   208→
+   209→const FONT_LINK = '<link href="https://fonts.googleapis.com/css2?family=Sarabun:wght@300;400;600;700&display=swap" rel="stylesheet">';
+   210→
+   211→const BASE_STYLES = `
+   212→  * { margin: 0; padding: 0; box-sizing: border-box; }
+   213→  body {
+   214→    font-family: 'Sarabun', 'Noto Sans Thai', sans-serif;
+   215→    font-size: 14px;
+   216→    line-height: 1.6;
+   217→    color: #1a1a1a;
+   218→    background: #fff;
+   219→    padding: 0;
+   220→  }
+   221→  .container {
+   222→    max-width: 680px;
+   223→    margin: 0 auto;
+   224→    padding: 20px 10px;
+   225→  }
+   226→  .header {
+   227→    text-align: center;
+   228→    border-bottom: 3px double #333;
+   229→    padding-bottom: 12px;
+   230→    margin-bottom: 20px;
+   231→  }
+   232→  .header h1 {
+   233→    font-size: 20px;
+   234→    font-weight: 700;
+   235→    margin-bottom: 4px;
+   236→  }
+   237→  .header .org-name {
+   238→    font-size: 16px;
+   239→    font-weight: 600;
+   240→    margin-bottom: 8px;
+   241→  }
+   242→  .header .form-meta {
+   243→    display: flex;
+   244→    justify-content: space-between;
+   245→    font-size: 13px;
+   246→    color: #555;
+   247→  }
+   248→  .header .ref-code {
+   249→    font-family: monospace;
+   250→    background: #f5f5f5;
+   251→    padding: 2px 8px;
+   252→    border: 1px solid #ddd;
+   253→    border-radius: 3px;
+   254→    font-size: 12px;
+   255→  }
+   256→  .section-title {
+   257→    font-size: 15px;
+   258→    font-weight: 700;
+   259→    margin: 16px 0 8px;
+   260→    padding-bottom: 4px;
+   261→    border-bottom: 1px solid #ccc;
+   262→  }
+   263→  table {
+   264→    width: 100%;
+   265→    border-collapse: collapse;
+   266→    margin-bottom: 16px;
+   267→    font-size: 13px;
+   268→  }
+   269→  th, td {
+   270→    border: 1px solid #999;
+   271→    padding: 8px 10px;
+   272→    text-align: left;
+   273→    vertical-align: top;
+   274→  }
+   275→  th {
+   276→    background: #e8f5e9;
+   277→    font-weight: 600;
+   278→    white-space: nowrap;
+   279→    width: 140px;
+   280→    color: #1b5e20;
+   281→  }
+   282→  td {
+   283→    color: #333;
+   284→  }
+   285→  .asset-table th {
+   286→    background: #2e7d32;
+   287→    color: #fff;
+   288→    text-align: center;
+   289→    font-size: 13px;
+   290→    padding: 6px 8px;
+   291→  }
+   292→  .asset-table td {
+   293→    text-align: center;
+   294→  }
+   295→  .signature-section {
+   296→    margin-top: 40px;
+   297→    display: flex;
+   298→    justify-content: space-between;
+   299→    page-break-inside: avoid;
+   300→  }
+   301→  .signature-box {
+   302→    text-align: center;
+   303→    width: 30%;
+   304→  }
+   305→  .signature-box .label {
+   306→    font-size: 13px;
+   307→    font-weight: 600;
+   308→    margin-bottom: 60px;
+   309→  }
+   310→  .signature-box .name {
+   311→    border-top: 1px solid #333;
+   312→    padding-top: 4px;
+   313→    font-size: 13px;
+   314→    font-weight: 600;
+   315→    min-width: 150px;
+   316→    margin: 0 auto;
+   317→  }
+   318→  .signature-box .role {
+   319→    font-size: 12px;
+   320→    color: #666;
+   321→    margin-top: 2px;
+   322→  }
+   323→  .footer {
+   324→    margin-top: 40px;
+   325→    padding-top: 8px;
+   326→    border-top: 1px solid #ccc;
+   327→    font-size: 11px;
+   328→    color: #888;
+   329→    text-align: center;
+   330→  }
+   331→  .notes-section {
+   332→    background: #fafafa;
+   333→    border: 1px solid #e0e0e0;
+   334→    border-radius: 4px;
+   335→    padding: 10px 12px;
+   336→    margin-bottom: 16px;
+   337→    font-size: 13px;
+   338→  }
+   339→  .notes-section .label {
+   340→    font-weight: 600;
+   341→    color: #555;
+   342→    margin-bottom: 4px;
+   343→  }
+   344→`;
+   345→
+   346→function generateRefCode(): string {
+   347→  const now = new Date();
+   348→  const y = now.getFullYear();
+   349→  const m = String(now.getMonth() + 1).padStart(2, '0');
+   350→  const d = String(now.getDate()).padStart(2, '0');
+   351→  const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+   352→  return `REF-${y}${m}${d}-${rand}`;
+   353→}
+   354→
+   355→function formatThaiDate(dateStr: string): string {
+   356→  const d = new Date(dateStr);
+   357→  return d.toLocaleDateString('th-TH', {
+   358→    year: 'numeric',
+   359→    month: 'long',
+   360→    day: 'numeric',
+   361→  });
+   362→}
+   363→
+   364→function formatThaiDateTime(dateStr: string): string {
+   365→  const d = new Date(dateStr);
+   366→  return d.toLocaleDateString('th-TH', {
+   367→    year: 'numeric',
+   368→    month: 'long',
+   369→    day: 'numeric',
+   370→    hour: '2-digit',
+   371→    minute: '2-digit',
+   372→  });
+   373→}
+   374→
+   375→function formatCurrency(value: number): string {
+   376→  return new Intl.NumberFormat('th-TH').format(Math.round(value)) + ' บาท';
+   377→}
+   378→
+   379→function safeStr(val: unknown, fallback = '-'): string {
+   380→  if (val === null || val === undefined || val === '') return fallback;
+   381→  return String(val);
+   382→}
+   383→
+   384→export interface BorrowFormData {
+   385→  record: BorrowRecord;
+   386→}
+   387→
+   388→export interface WriteoffFormData {
+   389→  record: WriteoffRecord;
+   390→}
+   391→
+   392→// ─── V2 Template Functions ──────────────────────────────────────────────────
+   393→
+   394→function formatThaiDateV2(dateStr: string): string {
+   395→  if (!dateStr) return '-';
+   396→  const d = new Date(dateStr);
+   397→  if (isNaN(d.getTime())) return dateStr;
+   398→  return d.toLocaleDateString('th-TH', {
+   399→    year: 'numeric',
+   400→    month: 'long',
+   401→    day: 'numeric',
+   402→  });
+   403→}
+   404→
+   405→function formatCurrencyV2(value: number): string {
+   406→  return new Intl.NumberFormat('th-TH').format(Math.round(value)) + ' บาท';
+   407→}
+   408→
+   409→function safeStrV2(val: unknown, fallback = '-'): string {
+   410→  if (val === null || val === undefined || val === '') return fallback;
+   411→  return String(val);
+   412→}
+   413→
+   414→function generateRefCodeV2(): string {
+   415→  const now = new Date();
+   416→  const y = now.getFullYear();
+   417→  const m = String(now.getMonth() + 1).padStart(2, '0');
+   418→  const d = String(now.getDate()).padStart(2, '0');
+   419→  const rand = Math.random().toString(36).substring(2, 8).toUpperCase();
+   420→  return `REF-${y}${m}${d}-${rand}`;
+   421→}
+   422→
+   423→export function generateBorrowFormHtml(data: BorrowFormTemplateData): string {
+   424→  const refCode = data.documentNumber || generateRefCodeV2();
+   425→  const orgName = data.organizationName || 'ระบบบริหารจัดการครุภัณฑ์';
+   426→  const now = new Date().toLocaleString('th-TH', {
+   427→    year: 'numeric', month: 'long', day: 'numeric',
+   428→    hour: '2-digit', minute: '2-digit',
+   429→  });
+   430→
+   431→  const statusLabels: Record<string, string> = {
+   432→    PENDING: 'รออนุมัติ', APPROVED: 'อนุมัติ', REJECTED: 'ปฏิเสธ',
+   433→    RETURNED: 'คืนแล้ว', OVERDUE: 'เกินกำหนด',
+   434→  };
+   435→  const statusLabel = statusLabels[data.status] || data.status;
+   436→
+   437→  const assetRows = data.assets.map((a, i) => `
+   438→        <tr>
+   439→          <td class="col-no">${i + 1}</td>
+   440→          <td style="font-family:monospace;">${safeStrV2(a.sku)}</td>
+   441→          <td style="font-weight:600;">${safeStrV2(a.name)}</td>
+   442→          <td>${safeStrV2(a.categoryName)}</td>
+   443→          <td style="text-align:right;">${formatCurrencyV2(a.currentValue)}</td>
+   444→          <td>${safeStrV2(a.location)}</td>
+   445→        </tr>`).join('');
+   446→
+   447→  return `<!DOCTYPE html>
+   448→<html lang="th">
+   449→<head>
+   450→  <meta charset="UTF-8">
+   451→  ${NOTO_FONT_LINK}
+   452→  <style>${FORM_V2_STYLES}</style>
+   453→</head>
+   454→<body>
+   455→  <div class="v2-container">
+   456→    <div class="v2-header">
+   457→      <div class="org-name">${orgName}</div>
+   458→      <h1>แบบฟอร์มคำขอยืม-คืนครุภัณฑ์</h1>
+   459→      <div class="form-meta">
+   460→        <span>เลขที่เอกสาร: <span class="doc-num">${refCode}</span></span>
+   461→        <span>วันที่ออก: ${now}</span>
+   462→      </div>
+   463→    </div>
+   464→    <div class="v2-border-wrap">
+   465→      <div class="v2-section-title">ข้อมูลผู้ยืม</div>
+   466→      <table class="v2-table">
+   467→        <tr>
+   468→          <th>ชื่อผู้ยืม</th>
+   469→          <td>${safeStrV2(data.borrowerName)}</td>
+   470→          <th>แผนก</th>
+   471→          <td>${safeStrV2(data.borrowerDepartment)}</td>
+   472→        </tr>
+   473→        <tr>
+   474→          <th>วันที่ยืม</th>
+   475→          <td>${formatThaiDateV2(data.borrowDate)}</td>
+   476→          <th>วันคืนที่คาด</th>
+   477→          <td>${formatThaiDateV2(data.expectedReturnDate)}</td>
+   478→        </tr>
+   479→        ${data.actualReturnDate ? `
+   480→        <tr>
+   481→          <th>วันที่คืนจริง</th>
+   482→          <td colspan="3">${formatThaiDateV2(data.actualReturnDate)}</td>
+   483→        </tr>` : ''}
+   484→        <tr>
+   485→          <th>สถานะ</th>
+   486→          <td colspan="3"><strong>${statusLabel}</strong></td>
+   487→        </tr>
+   488→      </table>
+   489→
+   490→      <div class="v2-section-title">รายละเอียดครุภัณฑ์</div>
+   491→      <table class="v2-table">
+   492→        <thead>
+   493→          <tr class="header-row">
+   494→            <th class="col-no">ลำดับ</th>
+   495→            <th>รหัส</th>
+   496→            <th>ชื่อครุภัณฑ์</th>
+   497→            <th>หมวดหมู่</th>
+   498→            <th>มูลค่า</th>
+   499→            <th>สถานที่</th>
+   500→          </tr>
+   501→        </thead>
+   502→        <tbody>
+   503→          ${assetRows}
+   504→        </tbody>
+   505→      </table>
+   506→
+   507→      ${data.notes ? `
+   508→      <div class="v2-section-title">หมายเหตุ</div>
+   509→      <div class="v2-notes-box">
+   510→        <div class="notes-label">หมายเหตุ:</div>
+   511→        ${data.notes}
+   512→      </div>` : ''}
+   513→
+   514→      <div class="v2-signature-section">
+   515→        <div class="v2-sig-box">
+   516→          <div class="sig-label">ลงชื่อ ผู้ขอยืม</div>
+   517→          <div class="sig-name">${safeStrV2(data.borrowerName, '................................')}</div>
+   518→          <div class="sig-role">(${safeStrV2(data.borrowerDepartment, '.................................')})</div>
+   519→          <div class="sig-date">วันที่ ...../...../........</div>
+   520→        </div>
+   521→        <div class="v2-sig-box">
+   522→          <div class="sig-label">ลงชื่อ ผู้อนุมัติ</div>
+   523→          <div class="sig-name">${safeStrV2(data.approvedByName, '................................')}</div>
+   524→          <div class="sig-role">(${data.approvedByName ? 'ผู้มีอำนาจอนุมัติ' : '.................................'})</div>
+   525→          <div class="sig-date">วันที่ ...../...../........</div>
+   526→        </div>
+   527→        <div class="v2-sig-box">
+   528→          <div class="sig-label">ลงชื่อ ผู้รับคืน</div>
+   529→          <div class="sig-name">................................</div>
+   530→          <div class="sig-role">(................................)</div>
+   531→          <div class="sig-date">วันที่ ...../...../........</div>
+   532→        </div>
+   533→      </div>
+   534→    </div>
+   535→
+   536→    <div class="v2-footer">
+   537→      <div class="copy-notice">ใบนี้เป็นสำเนาที่ถูกต้อง จัดทำโดยระบบบริหารจัดการครุภัณฑ์</div>
+   538→      <div>เลขที่อ้างอิง: ${refCode} | วันที่จัดทำ: ${now}</div>
+   539→    </div>
+   540→  </div>
+   541→</body>
+   542→</html>`;
+   543→}
+   544→
+   545→export function generateWriteoffFormHtml(data: WriteoffFormTemplateData): string {
+   546→  const refCode = data.documentNumber || generateRefCodeV2();
+   547→  const orgName = data.organizationName || 'ระบบบริหารจัดการครุภัณฑ์';
+   548→  const now = new Date().toLocaleString('th-TH', {
+   549→    year: 'numeric', month: 'long', day: 'numeric',
+   550→    hour: '2-digit', minute: '2-digit',
+   551→  });
+   552→
+   553→  const originalValue = data.purchasePrice;
+   554→  const currentValue = data.currentValue;
+   555→  const accumulatedDep = Math.max(0, originalValue - currentValue);
+   556→
+   557→  return `<!DOCTYPE html>
+   558→<html lang="th">
+   559→<head>
+   560→  <meta charset="UTF-8">
+   561→  ${NOTO_FONT_LINK}
+   562→  <style>${FORM_V2_STYLES}</style>
+   563→</head>
+   564→<body>
+   565→  <div class="v2-container">
+   566→    <div class="v2-header">
+   567→      <div class="org-name">${orgName}</div>
+   568→      <h1>แบบฟอร์มการตัดจำหน่ายครุภัณฑ์</h1>
+   569→      <div class="form-meta">
+   570→        <span>เลขที่เอกสาร: <span class="doc-num">${refCode}</span></span>
+   571→        <span>วันที่ออก: ${now}</span>
+   572→      </div>
+   573→    </div>
+   574→    <div class="v2-border-wrap">
+   575→      <div class="v2-section-title">รายละเอียดครุภัณฑ์</div>
+   576→      <table class="v2-table">
+   577→        <tr>
+   578→          <th>รหัสครุภัณฑ์</th>
+   579→          <td style="font-family:monospace;">${safeStrV2(data.assetSku)}</td>
+   580→          <th>ชื่อครุภัณฑ์</th>
+   581→          <td style="font-weight:600;">${safeStrV2(data.assetName)}</td>
+   582→        </tr>
+   583→        <tr>
+   584→          <th>หมวดหมู่</th>
+   585→          <td>${safeStrV2(data.categoryName)}</td>
+   586→          <th>วันที่จัดซื้อ</th>
+   587→          <td>${formatThaiDateV2(data.purchaseDate)}</td>
+   588→        </tr>
+   589→        <tr>
+   590→          <th>ราคาซื้อ</th>
+   591→          <td>${formatCurrencyV2(data.purchasePrice)}</td>
+   592→          <th>มูลค่าปัจจุบัน</th>
+   593→          <td>${formatCurrencyV2(data.currentValue)}</td>
+   594→        </tr>
+   595→      </table>
+   596→
+   597→      <div class="v2-section-title">รายละเอียดการตัดจำหน่าย</div>
+   598→      <table class="v2-table">
+   599→        <tr>
+   600→          <th>สาเหตุ</th>
+   601→          <td><strong>${safeStrV2(data.reasonLabel)}</strong> ${data.reason ? `(${data.reason})` : ''}</td>
+   602→          <th>วันที่</th>
+   603→          <td>${formatThaiDateV2(data.date)}</td>
+   604→        </tr>
+   605→        <tr>
+   606→          <th>รายละเอียด</th>
+   607→          <td colspan="3">${safeStrV2(data.description)}</td>
+   608→        </tr>
+   609→        <tr>
+   610→          <th>ผู้อนุมัติ</th>
+   611→          <td colspan="3">${safeStrV2(data.approvedByName, 'ยังไม่ได้รับการอนุมัติ')}</td>
+   612→        </tr>
+   613→      </table>
+   614→
+   615→      <div class="v2-section-title">รายละเอียดทางบัญชี</div>
+   616→      <table class="v2-table">
+   617→        <tr>
+   618→          <th>มูลค่าต้นทุน (ราคาซื้อ)</th>
+   619→          <td style="text-align:right;">${formatCurrencyV2(originalValue)}</td>
+   620→        </tr>
+   621→        <tr>
+   622→          <th>ค่าเสื่อมราคาสะสม</th>
+   623→          <td style="text-align:right;">${formatCurrencyV2(accumulatedDep)}</td>
+   624→        </tr>
+   625→        <tr>
+   626→          <th>มูลค่าปัจจุบัน (มูลค่าสุทธิ)</th>
+   627→          <td style="text-align:right;"><strong>${formatCurrencyV2(currentValue)}</strong></td>
+   628→        </tr>
+   629→      </table>
+   630→
+   631→      <div class="v2-signature-section">
+   632→        <div class="v2-sig-box">
+   633→          <div class="sig-label">ลงชื่อ ผู้ตรวจสอบ</div>
+   634→          <div class="sig-name">................................</div>
+   635→          <div class="sig-role">(ผู้ตรวจสอบครุภัณฑ์)</div>
+   636→          <div class="sig-date">วันที่ ...../...../........</div>
+   637→        </div>
+   638→        <div class="v2-sig-box">
+   639→          <div class="sig-label">ลงชื่อ ผู้อนุมัติ</div>
+   640→          <div class="sig-name">${safeStrV2(data.approvedByName, '................................')}</div>
+   641→          <div class="sig-role">(${data.approvedByName ? 'ผู้มีอำนาจอนุมัติ' : '.................................'})</div>
+   642→          <div class="sig-date">วันที่ ...../...../........</div>
+   643→        </div>
+   644→        <div class="v2-sig-box">
+   645→          <div class="sig-label">ลงชื่อ ผู้บริหาร</div>
+   646→          <div class="sig-name">................................</div>
+   647→          <div class="sig-role">(ผู้บริหาร/ผู้อำนวยการ)</div>
+   648→          <div class="sig-date">วันที่ ...../...../........</div>
+   649→        </div>
+   650→      </div>
+   651→    </div>
+   652→
+   653→    <div class="v2-footer">
+   654→      <div class="copy-notice">เอกสารฉบับนี้จัดทำเพื่อเป็นหลักฐานการตัดจำหน่ายครุภัณฑ์ตามระเบียบ</div>
+   655→      <div>เลขที่อ้างอิง: ${refCode} | วันที่จัดทำ: ${now}</div>
+   656→    </div>
+   657→  </div>
+   658→</body>
+   659→</html>`;
+   660→}
+   661→
+   662→// ─── Legacy Template Functions ──────────────────────────────────────────────
+   663→
+   664→export function generateBorrowFormHTML(data: BorrowFormData): string {
+   665→  const { record } = data;
+   666→  const refCode = generateRefCode();
+   667→  const now = new Date().toLocaleString('th-TH', {
+   668→    year: 'numeric',
+   669→    month: 'long',
+   670→    day: 'numeric',
+   671→    hour: '2-digit',
+   672→    minute: '2-digit',
+   673→  });
+   674→
+   675→  const asset = record.asset;
+   676→  const user = record.user;
+   677→  const approvedBy = record.approvedBy;
+   678→
+   679→  return `<!DOCTYPE html>
+   680→<html lang="th">
+   681→<head>
+   682→  <meta charset="UTF-8">
+   683→  ${FONT_LINK}
+   684→  <style>${BASE_STYLES}</style>
+   685→</head>
+   686→<body>
+   687→  <div class="container">
+   688→    <div class="header">
+   689→      <div class="org-name">ระบบบริหารจัดการครุภัณฑ์</div>
+   690→      <h1>แบบฟอร์มขอยืมครุภัณฑ์</h1>
+   691→      <div class="form-meta">
+   692→        <span>เลขที่เอกสาร: <span class="ref-code">${refCode}</span></span>
+   693→        <span>วันที่ออก: ${now}</span>
+   694→      </div>
+   695→    </div>
+   696→
+   697→    <div class="section-title">ข้อมูลผู้ขอยืม</div>
+   698→    <table>
+   699→      <tr>
+   700→        <th>ชื่อผู้ขอยืม</th>
+   701→        <td>${safeStr(user?.name)}</td>
+   702→        <th>แผนก</th>
+   703→        <td>${safeStr(user?.department)}</td>
+   704→      </tr>
+   705→      <tr>
+   706→        <th>อีเมล</th>
+   707→        <td colspan="3">${safeStr(user?.email)}</td>
+   708→      </tr>
+   709→    </table>
+   710→
+   711→    <div class="section-title">รายละเอียดการยืม</div>
+   712→    <table>
+   713→      <tr>
+   714→        <th>วันที่ขอยืม</th>
+   715→        <td>${record.borrowDate ? formatThaiDate(record.borrowDate) : '-'}</td>
+   716→        <th>วันคืนที่คาด</th>
+   717→        <td>${record.expectedReturnDate ? formatThaiDate(record.expectedReturnDate) : '-'}</td>
+   718→      </tr>
+   719→      <tr>
+   720→        <th>สถานะ</th>
+   721→        <td colspan="3">
+   722→          ${record.status === 'PENDING' ? 'รออนุมัติ' :
+   723→            record.status === 'APPROVED' ? 'อนุมัติ' :
+   724→            record.status === 'REJECTED' ? 'ปฏิเสธ' :
+   725→            record.status === 'RETURNED' ? 'คืนแล้ว' :
+   726→            record.status === 'OVERDUE' ? 'เกินกำหนด' : record.status}
+   727→        </td>
+   728→      </tr>
+   729→    </table>
+   730→
+   731→    <div class="section-title">รายละเอียดครุภัณฑ์</div>
+   732→    <table class="asset-table">
+   733→      <thead>
+   734→        <tr>
+   735→          <th>รหัสครุภัณฑ์</th>
+   736→          <th>ชื่อครุภัณฑ์</th>
+   737→          <th>หมวดหมู่</th>
+   738→          <th>มูลค่า</th>
+   739→          <th>สถานที่</th>
+   740→        </tr>
+   741→      </thead>
+   742→      <tbody>
+   743→        <tr>
+   744→          <td style="font-family:monospace;">${safeStr(asset?.sku)}</td>
+   745→          <td style="font-weight:600;">${safeStr(asset?.name)}</td>
+   746→          <td>${safeStr(asset?.category?.name)}</td>
+   747→          <td>${asset?.purchasePrice != null ? formatCurrency(asset.purchasePrice) : '-'}</td>
+   748→          <td>${safeStr(asset?.location)}</td>
+   749→        </tr>
+   750→      </tbody>
+   751→    </table>
+   752→
+   753→    ${record.notes ? `
+   754→    <div class="section-title">หมายเหตุ</div>
+   755→    <div class="notes-section">
+   756→      ${record.notes}
+   757→    </div>
+   758→    ` : ''}
+   759→
+   760→    <div class="signature-section">
+   761→      <div class="signature-box">
+   762→        <div class="label">ลงชื่อ ผู้ขอยืม</div>
+   763→        <div class="name">${safeStr(user?.name)}</div>
+   764→        <div class="role">(${safeStr(user?.department, '-')})</div>
+   765→      </div>
+   766→      <div class="signature-box">
+   767→        <div class="label">ลงชื่อ ผู้อนุมัติ</div>
+   768→        <div class="name">${safeStr(approvedBy?.name, '................................')}</div>
+   769→        <div class="role">(${approvedBy?.department || '.................................'})</div>
+   770→      </div>
+   771→      <div class="signature-box">
+   772→        <div class="label">ลงชื่อ ผู้จัดเก็บ</div>
+   773→        <div class="name">................................</div>
+   774→        <div class="role">(................................)</div>
+   775→      </div>
+   776→    </div>
+   777→
+   778→    <div class="footer">
+   779→      เอกสารนี้จัดทำโดยระบบบริหารจัดการครุภัณฑ์ | เลขที่อ้างอิง: ${refCode} | วันที่จัดทำ: ${now}
+   780→    </div>
+   781→  </div>
+   782→</body>
+   783→</html>`;
+   784→}
+   785→
+   786→export function generateReturnFormHTML(data: BorrowFormData): string {
+   787→  const { record } = data;
+   788→  const refCode = generateRefCode();
+   789→  const now = new Date().toLocaleString('th-TH', {
+   790→    year: 'numeric',
+   791→    month: 'long',
+   792→    day: 'numeric',
+   793→    hour: '2-digit',
+   794→    minute: '2-digit',
+   795→  });
+   796→
+   797→  const asset = record.asset;
+   798→  const user = record.user;
+   799→  const approvedBy = record.approvedBy;
+   800→
+   801→  return `<!DOCTYPE html>
+   802→<html lang="th">
+   803→<head>
+   804→  <meta charset="UTF-8">
+   805→  ${FONT_LINK}
+   806→  <style>${BASE_STYLES}</style>
+   807→</head>
+   808→<body>
+   809→  <div class="container">
+   810→    <div class="header">
+   811→      <div class="org-name">ระบบบริหารจัดการครุภัณฑ์</div>
+   812→      <h1>แบบฟอร์มคืนครุภัณฑ์</h1>
+   813→      <div class="form-meta">
+   814→        <span>เลขที่เอกสาร: <span class="ref-code">${refCode}</span></span>
+   815→        <span>วันที่ออก: ${now}</span>
+   816→      </div>
+   817→    </div>
+   818→
+   819→    <div class="section-title">ข้อมูลผู้คืน</div>
+   820→    <table>
+   821→      <tr>
+   822→        <th>ชื่อผู้คืน</th>
+   823→        <td>${safeStr(user?.name)}</td>
+   824→        <th>แผนก</th>
+   825→        <td>${safeStr(user?.department)}</td>
+   826→      </tr>
+   827→      <tr>
+   828→        <th>อีเมล</th>
+   829→        <td colspan="3">${safeStr(user?.email)}</td>
+   830→      </tr>
+   831→    </table>
+   832→
+   833→    <div class="section-title">รายละเอียดการคืน</div>
+   834→    <table>
+   835→      <tr>
+   836→        <th>วันที่ยืม</th>
+   837→        <td>${record.borrowDate ? formatThaiDate(record.borrowDate) : '-'}</td>
+   838→        <th>วันคืนที่คาด</th>
+   839→        <td>${record.expectedReturnDate ? formatThaiDate(record.expectedReturnDate) : '-'}</td>
+   840→      </tr>
+   841→      <tr>
+   842→        <th>วันที่คืนจริง</th>
+   843→        <td colspan="3">${record.actualReturnDate ? formatThaiDateTime(record.actualReturnDate) : '-'}</td>
+   844→      </tr>
+   845→      <tr>
+   846→        <th>ผู้อนุมัติการยืม</th>
+   847→        <td colspan="3">${safeStr(approvedBy?.name)}</td>
+   848→      </tr>
+   849→    </table>
+   850→
+   851→    <div class="section-title">รายละเอียดครุภัณฑ์</div>
+   852→    <table class="asset-table">
+   853→      <thead>
+   854→        <tr>
+   855→          <th>รหัสครุภัณฑ์</th>
+   856→          <th>ชื่อครุภัณฑ์</th>
+   857→          <th>หมวดหมู่</th>
+   858→          <th>มูลค่า</th>
+   859→          <th>สถานที่</th>
+   860→        </tr>
+   861→      </thead>
+   862→      <tbody>
+   863→        <tr>
+   864→          <td style="font-family:monospace;">${safeStr(asset?.sku)}</td>
+   865→          <td style="font-weight:600;">${safeStr(asset?.name)}</td>
+   866→          <td>${safeStr(asset?.category?.name)}</td>
+   867→          <td>${asset?.purchasePrice != null ? formatCurrency(asset.purchasePrice) : '-'}</td>
+   868→          <td>${safeStr(asset?.location)}</td>
+   869→        </tr>
+   870→      </tbody>
+   871→    </table>
+   872→
+   873→    ${record.notes ? `
+   874→    <div class="section-title">หมายเหตุ</div>
+   875→    <div class="notes-section">
+   876→      ${record.notes}
+   877→    </div>
+   878→    ` : ''}
+   879→
+   880→    <div class="notes-section" style="margin-top:16px;">
+   881→      <div class="label">สภาพครุภัณฑ์ที่คืน</div>
+   882→      <div>ครุภัณฑ์อยู่ในสภาพสมบูรณ์ พร้อมใช้งานต่อไป</div>
+   883→    </div>
+   884→
+   885→    <div class="signature-section">
+   886→      <div class="signature-box">
+   887→        <div class="label">ลงชื่อ ผู้คืนครุภัณฑ์</div>
+   888→        <div class="name">${safeStr(user?.name)}</div>
+   889→        <div class="role">(${safeStr(user?.department, '-')})</div>
+   890→      </div>
+   891→      <div class="signature-box">
+   892→        <div class="label">ลงชื่อ ผู้รับคืน/ตรวจสอบ</div>
+   893→        <div class="name">................................</div>
+   894→        <div class="role">(................................)</div>
+   895→      </div>
+   896→      <div class="signature-box">
+   897→        <div class="label">ลงชื่อ ผู้อนุมัติ</div>
+   898→        <div class="name">${safeStr(approvedBy?.name, '................................')}</div>
+   899→        <div class="role">(${approvedBy?.department || '.................................'})</div>
+   900→      </div>
+   901→    </div>
+   902→
+   903→    <div class="footer">
+   904→      เอกสารนี้จัดทำโดยระบบบริหารจัดการครุภัณฑ์ | เลขที่อ้างอิง: ${refCode} | วันที่จัดทำ: ${now}
+   905→    </div>
+   906→  </div>
+   907→</body>
+   908→</html>`;
+   909→}
+   910→
+   911→export function generateWriteoffFormHTML(data: WriteoffFormData): string {
+   912→  const { record } = data;
+   913→  const refCode = generateRefCode();
+   914→  const now = new Date().toLocaleString('th-TH', {
+   915→    year: 'numeric',
+   916→    month: 'long',
+   917→    day: 'numeric',
+   918→    hour: '2-digit',
+   919→    minute: '2-digit',
+   920→  });
+   921→
+   922→  const asset = record.asset;
+   923→  const approvedBy = record.approvedBy;
+   924→
+   925→  const reasonLabels: Record<string, string> = {
+   926→    DAMAGED: 'ชำรุด',
+   927→    LOST: 'สูญหาย',
+   928→    DEPRECIATED: 'เสื่อมสภาพ',
+   929→    OTHER: 'อื่นๆ',
+   930→  };
+   931→
+   932→  const originalValue = asset?.purchasePrice ?? 0;
+   933→  const currentValue = asset?.currentValue ?? 0;
+   934→  const accumulatedDep = Math.max(0, originalValue - currentValue);
+   935→  const purchaseDate = asset?.purchaseDate ? formatThaiDate(asset.purchaseDate) : '-';
+   936→
+   937→  return `<!DOCTYPE html>
+   938→<html lang="th">
+   939→<head>
+   940→  <meta charset="UTF-8">
+   941→  ${FONT_LINK}
+   942→  <style>${BASE_STYLES}</style>
+   943→</head>
+   944→<body>
+   945→  <div class="container">
+   946→    <div class="header">
+   947→      <div class="org-name">ระบบบริหารจัดการครุภัณฑ์</div>
+   948→      <h1>รายงานการตัดจำหน่ายครุภัณฑ์</h1>
+   949→      <div class="form-meta">
+   950→        <span>เลขที่เอกสาร: <span class="ref-code">${refCode}</span></span>
+   951→        <span>วันที่ออก: ${now}</span>
+   952→      </div>
+   953→    </div>
+   954→
+   955→    <div class="section-title">รายละเอียดครุภัณฑ์</div>
+   956→    <table class="asset-table">
+   957→      <thead>
+   958→        <tr>
+   959→          <th>รหัสครุภัณฑ์</th>
+   960→          <th>ชื่อครุภัณฑ์</th>
+   961→          <th>หมวดหมู่</th>
+   962→          <th>วันที่จัดซื้อ</th>
+   963→        </tr>
+   964→      </thead>
+   965→      <tbody>
+   966→        <tr>
+   967→          <td style="font-family:monospace;">${safeStr(asset?.sku)}</td>
+   968→          <td style="font-weight:600;">${safeStr(asset?.name)}</td>
+   969→          <td>${safeStr(asset?.category?.name)}</td>
+   970→          <td>${purchaseDate}</td>
+   971→        </tr>
+   972→      </tbody>
+   973→    </table>
+   974→
+   975→    <div class="section-title">ข้อมูลทางการเงิน</div>
+   976→    <table>
+   977→      <tr>
+   978→        <th>มูลค่าต้นทุน</th>
+   979→        <td>${formatCurrency(originalValue)}</td>
+   980→        <th>มูลค่าปัจจุบัน</th>
+   981→        <td>${formatCurrency(currentValue)}</td>
+   982→      </tr>
+   983→      <tr>
+   984→        <th>ค่าเสื่อมราคาสะสม</th>
+   985→        <td>${formatCurrency(accumulatedDep)}</td>
+   986→        <th>อายุการใช้งาน</th>
+   987→        <td>${safeStr(asset?.usefulLifeYears)} ปี</td>
+   988→      </tr>
+   989→      <tr>
+   990→        <th>มูลค่าซาก</th>
+   991→        <td>${asset?.salvageValue != null ? formatCurrency(asset.salvageValue) : '-'}</td>
+   992→        <th>สถานที่เก็บ</th>
+   993→        <td>${safeStr(asset?.location)}</td>
+   994→      </tr>
+   995→    </table>
+   996→
+   997→    <div class="section-title">รายละเอียดการตัดจำหน่าย</div>
+   998→    <table>
+   999→      <tr>
+  1000→        <th>วันที่ขอตัดจำหน่าย</th>
+  1001→        <td>${record.date ? formatThaiDate(record.date) : '-'}</td>
+  1002→        <th>สาเหตุ</th>
+  1003→        <td><strong>${reasonLabels[record.reason] || record.reason}</strong></td>
+  1004→      </tr>
+  1005→      <tr>
+  1006→        <th>รายละเอียด</th>
+  1007→        <td colspan="3">${record.description}</td>
+  1008→      </tr>
+  1009→      <tr>
+  1010→        <th>ผู้อนุมัติ</th>
+  1011→        <td colspan="3">${safeStr(approvedBy?.name, '-')}
+  1012→          ${approvedBy?.department ? `(${approvedBy.department})` : ''}
+  1013→        </td>
+  1014→      </tr>
+  1015→      <tr>
+  1016→        <th>สถานะ</th>
+  1017→        <td colspan="3">
+  1018→          ${record.status === 'PENDING' ? 'รออนุมัติ' :
+  1019→            record.status === 'APPROVED' ? 'อนุมัติแล้ว - ครุภัณฑ์ถูกตัดจำหน่ายแล้ว' :
+  1020→            record.status === 'REJECTED' ? 'ปฏิเสธ' : record.status}
+  1021→        </td>
+  1022→      </tr>
+  1023→    </table>
+  1024→
+  1025→    <div class="signature-section">
+  1026→      <div class="signature-box">
+  1027→        <div class="label">ลงชื่อ ผู้ขอตัดจำหน่าย</div>
+  1028→        <div class="name">................................</div>
+  1029→        <div class="role">(................................)</div>
+  1030→      </div>
+  1031→      <div class="signature-box">
+  1032→        <div class="label">ลงชื่อ ผู้ตรวจสอบ</div>
+  1033→        <div class="name">................................</div>
+  1034→        <div class="role">(................................)</div>
+  1035→      </div>
+  1036→      <div class="signature-box">
+  1037→        <div class="label">ลงชื่อ ผู้อนุมัติ</div>
+  1038→        <div class="name">${safeStr(approvedBy?.name, '................................')}</div>
+  1039→        <div class="role">(${approvedBy?.department || '.................................'})</div>
+  1040→      </div>
+  1041→    </div>
+  1042→
+  1043→    <div class="footer">
+  1044→      เอกสารนี้จัดทำโดยระบบบริหารจัดการครุภัณฑ์ | เลขที่อ้างอิง: ${refCode} | วันที่จัดทำ: ${now}
+  1045→    </div>
+  1046→  </div>
+  1047→</body>
+  1048→</html>`;
+  1049→}

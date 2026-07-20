@@ -1,0 +1,859 @@
+     1→'use client';
+     2→
+     3→import { useEffect, useState, useCallback, useMemo } from 'react';
+     4→import QRCode from 'qrcode';
+     5→import type { Asset, AssetCategory, AssetStatus, BorrowRecord, MaintenanceLog } from '@/types';
+     6→import { useAuthStore } from '@/store';
+     7→import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+     8→import { Button } from '@/components/ui/button';
+     9→import { Input } from '@/components/ui/input';
+    10→import { Label } from '@/components/ui/label';
+    11→import { Badge } from '@/components/ui/badge';
+    12→import { Skeleton } from '@/components/ui/skeleton';
+    13→import { Separator } from '@/components/ui/separator';
+    14→import { ScrollArea } from '@/components/ui/scroll-area';
+    15→import { Textarea } from '@/components/ui/textarea';
+    16→import {
+    17→  Table,
+    18→  TableBody,
+    19→  TableCell,
+    20→  TableHead,
+    21→  TableHeader,
+    22→  TableRow,
+    23→} from '@/components/ui/table';
+    24→import {
+    25→  Dialog,
+    26→  DialogContent,
+    27→  DialogHeader,
+    28→  DialogTitle,
+    29→  DialogDescription,
+    30→} from '@/components/ui/dialog';
+    31→import {
+    32→  AlertDialog,
+    33→  AlertDialogAction,
+    34→  AlertDialogCancel,
+    35→  AlertDialogContent,
+    36→  AlertDialogDescription,
+    37→  AlertDialogFooter,
+    38→  AlertDialogHeader,
+    39→  AlertDialogTitle,
+    40→} from '@/components/ui/alert-dialog';
+    41→import {
+    42→  Select,
+    43→  SelectContent,
+    44→  SelectItem,
+    45→  SelectTrigger,
+    46→  SelectValue,
+    47→} from '@/components/ui/select';
+    48→import {
+    49→  Search,
+    50→  Plus,
+    51→  Eye,
+    52→  Pencil,
+    53→  Trash2,
+    54→  ChevronLeft,
+    55→  ChevronRight,
+    56→  QrCode,
+    57→  Package,
+    58→  Calendar,
+    59→  MapPin,
+    60→  Shield,
+    61→  Upload,
+    62→  Printer,
+    63→} from 'lucide-react';
+    64→import { Checkbox } from '@/components/ui/checkbox';
+    65→import { BulkUploadDialog } from '@/components/bulk-upload-dialog';
+    66→import { ThermalLabelPrintView, type LabelSize } from '@/components/thermal-label-print-view';
+    67→import { format } from 'date-fns';
+    68→import { th } from 'date-fns/locale';
+    69→import { useToast } from '@/hooks/use-toast';
+    70→
+    71→const STATUS_LABELS: Record<AssetStatus, string> = {
+    72→  AVAILABLE: 'พร้อมใช้งาน',
+    73→  BORROWED: 'ถูกยืม',
+    74→  MAINTENANCE: 'ซ่อมบำรุง',
+    75→  WRITEOFF: 'ตัดจำหน่าย',
+    76→};
+    77→
+    78→const STATUS_BADGE: Record<AssetStatus, string> = {
+    79→  AVAILABLE: 'bg-emerald-100 text-emerald-800 border-emerald-200',
+    80→  BORROWED: 'bg-amber-100 text-amber-800 border-amber-200',
+    81→  MAINTENANCE: 'bg-orange-100 text-orange-800 border-orange-200',
+    82→  WRITEOFF: 'bg-red-100 text-red-800 border-red-200',
+    83→};
+    84→
+    85→const BORROW_STATUS_LABELS: Record<string, string> = {
+    86→  PENDING: 'รออนุมัติ',
+    87→  APPROVED: 'อนุมัติแล้ว',
+    88→  REJECTED: 'ปฏิเสธ',
+    89→  RETURNED: 'คืนแล้ว',
+    90→  OVERDUE: 'เกินกำหนด',
+    91→};
+    92→
+    93→function formatCurrency(num: number) {
+    94→  return new Intl.NumberFormat('th-TH').format(Math.round(num));
+    95→}
+    96→
+    97→interface AssetFormData {
+    98→  name: string;
+    99→  categoryId: string;
+   100→  purchasePrice: string;
+   101→  salvageValue: string;
+   102→  purchaseDate: string;
+   103→  usefulLifeYears: string;
+   104→  location: string;
+   105→  warrantyExpiry: string;
+   106→  description: string;
+   107→  status: AssetStatus;
+   108→}
+   109→
+   110→const EMPTY_FORM: AssetFormData = {
+   111→  name: '',
+   112→  categoryId: '',
+   113→  purchasePrice: '',
+   114→  salvageValue: '',
+   115→  purchaseDate: '',
+   116→  usefulLifeYears: '5',
+   117→  location: '',
+   118→  warrantyExpiry: '',
+   119→  description: '',
+   120→  status: 'AVAILABLE',
+   121→};
+   122→
+   123→export function AssetsPage() {
+   124→  const currentUser = useAuthStore((s) => s.currentUser);
+   125→  const { toast } = useToast();
+   126→  const canManage = currentUser?.role === 'ADMIN' || currentUser?.role === 'STAFF';
+   127→  const [showBulkUpload, setShowBulkUpload] = useState(false);
+   128→
+   129→  // Selection state for label printing
+   130→  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+   131→  const [showPrintView, setShowPrintView] = useState(false);
+   132→  const [labelSize, setLabelSize] = useState<LabelSize>('70x24');
+   133→
+   134→  const toggleSelect = (id: string) => {
+   135→    setSelectedIds((prev) => {
+   136→      const next = new Set(prev);
+   137→      if (next.has(id)) next.delete(id); else next.add(id);
+   138→      return next;
+   139→    });
+   140→  };
+   141→
+   142→  const toggleSelectAll = () => {
+   143→    if (selectedIds.size === assets.length) {
+   144→      setSelectedIds(new Set());
+   145→    } else {
+   146→      setSelectedIds(new Set(assets.map((a) => a.id)));
+   147→    }
+   148→  };
+   149→
+   150→  const triggerPrint = useCallback(() => {
+   151→    window.print();
+   152→  }, []);
+   153→
+   154→  // List state
+   155→  const [assets, setAssets] = useState<Asset[]>([]);
+   156→  const [categories, setCategories] = useState<AssetCategory[]>([]);
+   157→  const [loading, setLoading] = useState(true);
+   158→  const [search, setSearch] = useState('');
+   159→  const [filterCategory, setFilterCategory] = useState('');
+   160→  const [filterStatus, setFilterStatus] = useState('');
+   161→  const [page, setPage] = useState(1);
+   162→  const [totalPages, setTotalPages] = useState(1);
+   163→  const [total, setTotal] = useState(0);
+   164→
+   165→  // Dialogs
+   166→  const [showForm, setShowForm] = useState(false);
+   167→  const [showDetail, setShowDetail] = useState(false);
+   168→  const [showDelete, setShowDelete] = useState(false);
+   169→  const [selectedAsset, setSelectedAsset] = useState<Asset | null>(null);
+   170→  const [form, setForm] = useState<AssetFormData>(EMPTY_FORM);
+   171→  const [formLoading, setFormLoading] = useState(false);
+   172→  const [detailData, setDetailData] = useState<Asset & { borrowRecords?: BorrowRecord[]; maintenanceLogs?: MaintenanceLog[] } | null>(null);
+   173→  const [qrUrl, setQrUrl] = useState('');
+   174→  const [deleteLoading, setDeleteLoading] = useState(false);
+   175→
+   176→  const fetchAssets = useCallback(async () => {
+   177→    setLoading(true);
+   178→    try {
+   179→      const params = new URLSearchParams();
+   180→      if (search) params.set('search', search);
+   181→      if (filterCategory) params.set('category', filterCategory);
+   182→      if (filterStatus) params.set('status', filterStatus);
+   183→      params.set('page', String(page));
+   184→      params.set('limit', '10');
+   185→
+   186→      const res = await fetch(`/api/assets?${params}`);
+   187→      const data = await res.json();
+   188→      setAssets(data.assets || []);
+   189→      setTotalPages(data.totalPages || 1);
+   190→      setTotal(data.total || 0);
+   191→    } catch {
+   192→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถโหลดข้อมูลครุภัณฑ์ได้', variant: 'destructive' });
+   193→    } finally {
+   194→      setLoading(false);
+   195→    }
+   196→  }, [search, filterCategory, filterStatus, page, toast]);
+   197→
+   198→  const selectedAssets = useMemo(() => {
+   199→    if (!showPrintView) return [];
+   200→    return assets.filter((a) => selectedIds.has(a.id));
+   201→  }, [assets, selectedIds, showPrintView]);
+   202→
+   203→  const handlePrintLabels = () => {
+   204→    if (selectedIds.size === 0) {
+   205→      toast({ title: 'กรุณาเลือกครุภัณฑ์', description: 'เลือกอย่างน้อย 1 รายการเพื่อพิมพ์ฉลาก', variant: 'destructive' });
+   206→      return;
+   207→    }
+   208→    setShowPrintView(true);
+   209→  };
+   210→
+   211→  const fetchCategories = async () => {
+   212→    try {
+   213→      const res = await fetch('/api/categories');
+   214→      const data = await res.json();
+   215→      setCategories(data);
+   216→    } catch {
+   217→      // ignore
+   218→    }
+   219→  };
+   220→
+   221→  useEffect(() => {
+   222→    fetchCategories();
+   223→  }, []);
+   224→
+   225→  useEffect(() => {
+   226→    fetchAssets();
+   227→  }, [fetchAssets]);
+   228→
+   229→  // Reset page and selection on filter change
+   230→  useEffect(() => {
+   231→    setPage(1);
+   232→    setSelectedIds(new Set());
+   233→  }, [search, filterCategory, filterStatus]);
+   234→
+   235→  const openCreateForm = () => {
+   236→    setForm(EMPTY_FORM);
+   237→    setSelectedAsset(null);
+   238→    setShowForm(true);
+   239→  };
+   240→
+   241→  const openEditForm = (asset: Asset) => {
+   242→    setSelectedAsset(asset);
+   243→    setForm({
+   244→      name: asset.name,
+   245→      categoryId: asset.categoryId,
+   246→      purchasePrice: String(asset.purchasePrice),
+   247→      salvageValue: String(asset.salvageValue),
+   248→      purchaseDate: asset.purchaseDate ? asset.purchaseDate.split('T')[0] : '',
+   249→      usefulLifeYears: String(asset.usefulLifeYears),
+   250→      location: asset.location || '',
+   251→      warrantyExpiry: asset.warrantyExpiry ? asset.warrantyExpiry.split('T')[0] : '',
+   252→      description: asset.description || '',
+   253→      status: asset.status,
+   254→    });
+   255→    setShowForm(true);
+   256→  };
+   257→
+   258→  const handleSubmit = async () => {
+   259→    if (!form.name || !form.categoryId || !form.purchasePrice || !form.purchaseDate) {
+   260→      toast({ title: 'กรุณากรอกข้อมูลที่จำเป็น', variant: 'destructive' });
+   261→      return;
+   262→    }
+   263→    setFormLoading(true);
+   264→    try {
+   265→      const url = selectedAsset ? `/api/assets/${selectedAsset.id}` : '/api/assets';
+   266→      const method = selectedAsset ? 'PUT' : 'POST';
+   267→      const body: Record<string, unknown> = {
+   268→        name: form.name,
+   269→        categoryId: form.categoryId,
+   270→        purchasePrice: parseFloat(form.purchasePrice),
+   271→        salvageValue: parseFloat(form.salvageValue) || 0,
+   272→        purchaseDate: form.purchaseDate,
+   273→        usefulLifeYears: parseInt(form.usefulLifeYears) || 5,
+   274→        location: form.location || null,
+   275→        warrantyExpiry: form.warrantyExpiry || null,
+   276→        description: form.description || null,
+   277→        status: form.status,
+   278→      };
+   279→
+   280→      const res = await fetch(url, { method, headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body) });
+   281→      if (!res.ok) throw new Error();
+   282→      toast({ title: selectedAsset ? 'แก้ไขครุภัณฑ์สำเร็จ' : 'เพิ่มครุภัณฑ์สำเร็จ' });
+   283→      setShowForm(false);
+   284→      fetchAssets();
+   285→    } catch {
+   286→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถบันทึกข้อมูลได้', variant: 'destructive' });
+   287→    } finally {
+   288→      setFormLoading(false);
+   289→    }
+   290→  };
+   291→
+   292→  const openDetail = async (asset: Asset) => {
+   293→    setSelectedAsset(asset);
+   294→    setShowDetail(true);
+   295→    try {
+   296→      const res = await fetch(`/api/assets/${asset.id}`);
+   297→      const data = await res.json();
+   298→      setDetailData(data);
+   299→      const url = await QRCode.toDataURL(asset.sku, { width: 200, margin: 2, color: { dark: '#0f766e' } });
+   300→      setQrUrl(url);
+   301→    } catch {
+   302→      setDetailData(asset);
+   303→    }
+   304→  };
+   305→
+   306→  const openDelete = (asset: Asset) => {
+   307→    setSelectedAsset(asset);
+   308→    setShowDelete(true);
+   309→  };
+   310→
+   311→  const handleDelete = async () => {
+   312→    if (!selectedAsset) return;
+   313→    setDeleteLoading(true);
+   314→    try {
+   315→      const res = await fetch(`/api/assets/${selectedAsset.id}`, { method: 'DELETE' });
+   316→      if (!res.ok) throw new Error();
+   317→      toast({ title: 'ลบครุภัณฑ์สำเร็จ' });
+   318→      setShowDelete(false);
+   319→      fetchAssets();
+   320→    } catch {
+   321→      toast({ title: 'เกิดข้อผิดพลาด', description: 'ไม่สามารถลบข้อมูลได้', variant: 'destructive' });
+   322→    } finally {
+   323→      setDeleteLoading(false);
+   324→    }
+   325→  };
+   326→
+   327→  return (
+   328→    <div className="space-y-4">
+   329→      {/* Top Bar */}
+   330→      <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+   331→        <div>
+   332→          <h2 className="text-xl font-bold">ครุภัณฑ์ทั้งหมด</h2>
+   333→          <p className="text-sm text-muted-foreground">ทั้งหมด {total} รายการ</p>
+   334→        </div>
+   335→        <div className="flex items-center gap-2 flex-wrap">
+   336→          {selectedIds.size > 0 && (
+   337→            <Button
+   338→              variant="default"
+   339→              onClick={handlePrintLabels}
+   340→              className="bg-teal-600 hover:bg-teal-700 text-white"
+   341→            >
+   342→              <Printer className="h-4 w-4 mr-2" />
+   343→              พิมพ์ฉลาก ({selectedIds.size})
+   344→            </Button>
+   345→          )}
+   346→          {canManage && (
+   347→            <>
+   348→              <Button variant="outline" onClick={() => setShowBulkUpload(true)}>
+   349→                <Upload className="h-4 w-4 mr-2" />
+   350→                อัปโหลดหลายรายการ
+   351→              </Button>
+   352→              <Button onClick={openCreateForm} className="bg-emerald-600 hover:bg-emerald-700 text-white shrink-0">
+   353→                <Plus className="h-4 w-4 mr-2" />
+   354→                เพิ่มครุภัณฑ์
+   355→              </Button>
+   356→            </>
+   357→          )}
+   358→        </div>
+   359→      </div>
+   360→
+   361→      {/* Filters */}
+   362→      <div className="flex flex-col sm:flex-row gap-3">
+   363→        <div className="relative flex-1">
+   364→          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+   365→          <Input
+   366→            placeholder="ค้นหาครุภัณฑ์..."
+   367→            value={search}
+   368→            onChange={(e) => setSearch(e.target.value)}
+   369→            className="pl-9"
+   370→          />
+   371→        </div>
+   372→        <Select value={filterCategory} onValueChange={setFilterCategory}>
+   373→          <SelectTrigger className="w-full sm:w-48">
+   374→            <SelectValue placeholder="หมวดหมู่ทั้งหมด" />
+   375→          </SelectTrigger>
+   376→          <SelectContent>
+   377→            <SelectItem value="all">หมวดหมู่ทั้งหมด</SelectItem>
+   378→            {categories.map((cat) => (
+   379→              <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   380→            ))}
+   381→          </SelectContent>
+   382→        </Select>
+   383→        <Select value={filterStatus} onValueChange={setFilterStatus}>
+   384→          <SelectTrigger className="w-full sm:w-40">
+   385→            <SelectValue placeholder="สถานะทั้งหมด" />
+   386→          </SelectTrigger>
+   387→          <SelectContent>
+   388→            <SelectItem value="all">สถานะทั้งหมด</SelectItem>
+   389→            <SelectItem value="AVAILABLE">พร้อมใช้งาน</SelectItem>
+   390→            <SelectItem value="BORROWED">ถูกยืม</SelectItem>
+   391→            <SelectItem value="MAINTENANCE">ซ่อมบำรุง</SelectItem>
+   392→            <SelectItem value="WRITEOFF">ตัดจำหน่าย</SelectItem>
+   393→          </SelectContent>
+   394→        </Select>
+   395→      </div>
+   396→
+   397→      {/* Table */}
+   398→      <Card>
+   399→        <CardContent className="p-0">
+   400→          <div className="overflow-x-auto">
+   401→            <Table>
+   402→              <TableHeader>
+   403→                <TableRow>
+   404→                  <TableHead className="w-10 pl-4">
+   405→                    <Checkbox
+   406→                      checked={assets.length > 0 && selectedIds.size === assets.length}
+   407→                      onCheckedChange={toggleSelectAll}
+   408→                      aria-label="เลือกทั้งหมด"
+   409→                    />
+   410→                  </TableHead>
+   411→                  <TableHead className="font-medium text-muted-foreground">SKU</TableHead>
+   412→                  <TableHead className="font-medium text-muted-foreground">ชื่อครุภัณฑ์</TableHead>
+   413→                  <TableHead className="font-medium text-muted-foreground hidden md:table-cell">หมวดหมู่</TableHead>
+   414→                  <TableHead className="font-medium text-muted-foreground">สถานะ</TableHead>
+   415→                  <TableHead className="font-medium text-muted-foreground text-right hidden sm:table-cell">ราคาซื้อ</TableHead>
+   416→                  <TableHead className="font-medium text-muted-foreground text-right hidden lg:table-cell">มูลค่าปัจจุบัน</TableHead>
+   417→                  <TableHead className="font-medium text-muted-foreground hidden lg:table-cell">สถานที่</TableHead>
+   418→                  <TableHead className="font-medium text-muted-foreground text-right">จัดการ</TableHead>
+   419→                </TableRow>
+   420→              </TableHeader>
+   421→              <TableBody>
+   422→                {loading ? (
+   423→                  Array.from({ length: 5 }).map((_, i) => (
+   424→                    <TableRow key={i}>
+   425→                      {Array.from({ length: 9 }).map((_, j) => (
+   426→                        <TableCell key={j}>
+   427→                          <Skeleton className="h-5 w-full" />
+   428→                        </TableCell>
+   429→                      ))}
+   430→                    </TableRow>
+   431→                  ))
+   432→                ) : assets.length === 0 ? (
+   433→                  <TableRow>
+   434→                    <TableCell colSpan={9} className="text-center py-12 text-muted-foreground">
+   435→                      <Package className="h-10 w-10 mx-auto mb-2 opacity-40" />
+   436→                      ไม่พบครุภัณฑ์
+   437→                    </TableCell>
+   438→                  </TableRow>
+   439→                ) : (
+   440→                  assets.map((asset) => (
+   441→                    <TableRow key={asset.id} className={`${selectedIds.has(asset.id) ? 'bg-emerald-50/50' : ''} group`}>
+   442→                      <TableCell className="pl-4">
+   443→                        <Checkbox
+   444→                          checked={selectedIds.has(asset.id)}
+   445→                          onCheckedChange={() => toggleSelect(asset.id)}
+   446→                          aria-label={`เลือก ${asset.name}`}
+   447→                        />
+   448→                      </TableCell>
+   449→                      <TableCell className="font-mono text-xs text-muted-foreground">{asset.sku}</TableCell>
+   450→                      <TableCell className="font-medium text-sm max-w-[200px] truncate">{asset.name}</TableCell>
+   451→                      <TableCell className="text-sm text-muted-foreground hidden md:table-cell">{asset.category?.name || '-'}</TableCell>
+   452→                      <TableCell>
+   453→                        <Badge variant="outline" className={`text-xs ${STATUS_BADGE[asset.status]}`}>
+   454→                          {STATUS_LABELS[asset.status]}
+   455→                        </Badge>
+   456→                      </TableCell>
+   457→                      <TableCell className="text-sm text-right hidden sm:table-cell">{formatCurrency(asset.purchasePrice)}</TableCell>
+   458→                      <TableCell className="text-sm text-right hidden lg:table-cell">{formatCurrency(asset.currentValue)}</TableCell>
+   459→                      <TableCell className="text-sm text-muted-foreground hidden lg:table-cell max-w-[120px] truncate">{asset.location || '-'}</TableCell>
+   460→                      <TableCell className="text-right">
+   461→                        <div className="flex items-center justify-end gap-1">
+   462→                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openDetail(asset)}>
+   463→                            <Eye className="h-4 w-4" />
+   464→                          </Button>
+   465→                          {canManage && (
+   466→                            <>
+   467→                              <Button variant="ghost" size="icon" className="h-8 w-8" onClick={() => openEditForm(asset)}>
+   468→                                <Pencil className="h-4 w-4" />
+   469→                              </Button>
+   470→                              <Button variant="ghost" size="icon" className="h-8 w-8 text-red-500 hover:text-red-600 hover:bg-red-50" onClick={() => openDelete(asset)}>
+   471→                                <Trash2 className="h-4 w-4" />
+   472→                              </Button>
+   473→                            </>
+   474→                          )}
+   475→                        </div>
+   476→                      </TableCell>
+   477→                    </TableRow>
+   478→                  ))
+   479→                )}
+   480→              </TableBody>
+   481→            </Table>
+   482→          </div>
+   483→
+   484→          {/* Pagination */}
+   485→          {!loading && totalPages > 1 && (
+   486→            <div className="flex items-center justify-between px-4 py-3 border-t">
+   487→              <p className="text-sm text-muted-foreground">
+   488→                หน้า {page} จาก {totalPages}
+   489→              </p>
+   490→              <div className="flex items-center gap-1">
+   491→                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page <= 1} onClick={() => setPage(page - 1)}>
+   492→                  <ChevronLeft className="h-4 w-4" />
+   493→                </Button>
+   494→                {Array.from({ length: Math.min(5, totalPages) }, (_, i) => {
+   495→                  let pageNum: number;
+   496→                  if (totalPages <= 5) {
+   497→                    pageNum = i + 1;
+   498→                  } else if (page <= 3) {
+   499→                    pageNum = i + 1;
+   500→                  } else if (page >= totalPages - 2) {
+   501→                    pageNum = totalPages - 4 + i;
+   502→                  } else {
+   503→                    pageNum = page - 2 + i;
+   504→                  }
+   505→                  return (
+   506→                    <Button
+   507→                      key={pageNum}
+   508→                      variant={page === pageNum ? 'default' : 'outline'}
+   509→                      size="icon"
+   510→                      className="h-8 w-8"
+   511→                      onClick={() => setPage(pageNum)}
+   512→                    >
+   513→                      {pageNum}
+   514→                    </Button>
+   515→                  );
+   516→                })}
+   517→                <Button variant="outline" size="icon" className="h-8 w-8" disabled={page >= totalPages} onClick={() => setPage(page + 1)}>
+   518→                  <ChevronRight className="h-4 w-4" />
+   519→                </Button>
+   520→              </div>
+   521→            </div>
+   522→          )}
+   523→        </CardContent>
+   524→      </Card>
+   525→
+   526→      {/* Add/Edit Dialog */}
+   527→      <Dialog open={showForm} onOpenChange={setShowForm}>
+   528→        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto custom-scrollbar">
+   529→          <DialogHeader>
+   530→            <DialogTitle>{selectedAsset ? 'แก้ไขครุภัณฑ์' : 'เพิ่มครุภัณฑ์ใหม่'}</DialogTitle>
+   531→            <DialogDescription>
+   532→              {selectedAsset ? 'แก้ไขข้อมูลครุภัณฑ์' : 'กรอกข้อมูลครุภัณฑ์ที่ต้องการเพิ่ม'}
+   533→            </DialogDescription>
+   534→          </DialogHeader>
+   535→          <div className="grid gap-4 py-2">
+   536→            <div className="grid gap-2">
+   537→              <Label htmlFor="form-name">ชื่อครุภัณฑ์ *</Label>
+   538→              <Input id="form-name" value={form.name} onChange={(e) => setForm({ ...form, name: e.target.value })} placeholder="เช่น คอมพิวเตอร์โน๊ตบุ๊ค" />
+   539→            </div>
+   540→            <div className="grid gap-2">
+   541→              <Label htmlFor="form-category">หมวดหมู่ *</Label>
+   542→              <Select value={form.categoryId} onValueChange={(v) => setForm({ ...form, categoryId: v })}>
+   543→                <SelectTrigger id="form-category">
+   544→                  <SelectValue placeholder="เลือกหมวดหมู่" />
+   545→                </SelectTrigger>
+   546→                <SelectContent>
+   547→                  {categories.map((cat) => (
+   548→                    <SelectItem key={cat.id} value={cat.id}>{cat.name}</SelectItem>
+   549→                  ))}
+   550→                </SelectContent>
+   551→              </Select>
+   552→            </div>
+   553→            <div className="grid grid-cols-2 gap-4">
+   554→              <div className="grid gap-2">
+   555→                <Label htmlFor="form-price">ราคาซื้อ (บาท) *</Label>
+   556→                <Input id="form-price" type="number" value={form.purchasePrice} onChange={(e) => setForm({ ...form, purchasePrice: e.target.value })} placeholder="0.00" />
+   557→              </div>
+   558→              <div className="grid gap-2">
+   559→                <Label htmlFor="form-salvage">มูลค่าซาก (บาท)</Label>
+   560→                <Input id="form-salvage" type="number" value={form.salvageValue} onChange={(e) => setForm({ ...form, salvageValue: e.target.value })} placeholder="0.00" />
+   561→              </div>
+   562→            </div>
+   563→            <div className="grid grid-cols-2 gap-4">
+   564→              <div className="grid gap-2">
+   565→                <Label htmlFor="form-date">วันที่ซื้อ *</Label>
+   566→                <Input id="form-date" type="date" value={form.purchaseDate} onChange={(e) => setForm({ ...form, purchaseDate: e.target.value })} />
+   567→              </div>
+   568→              <div className="grid gap-2">
+   569→                <Label htmlFor="form-life">อายุการใช้งาน (ปี)</Label>
+   570→                <Input id="form-life" type="number" value={form.usefulLifeYears} onChange={(e) => setForm({ ...form, usefulLifeYears: e.target.value })} />
+   571→              </div>
+   572→            </div>
+   573→            <div className="grid grid-cols-2 gap-4">
+   574→              <div className="grid gap-2">
+   575→                <Label htmlFor="form-location">สถานที่ตั้ง</Label>
+   576→                <Input id="form-location" value={form.location} onChange={(e) => setForm({ ...form, location: e.target.value })} placeholder="เช่น อาคาร A ชั้น 2" />
+   577→              </div>
+   578→              <div className="grid gap-2">
+   579→                <Label htmlFor="form-warranty">วันหมดประกัน</Label>
+   580→                <Input id="form-warranty" type="date" value={form.warrantyExpiry} onChange={(e) => setForm({ ...form, warrantyExpiry: e.target.value })} />
+   581→              </div>
+   582→            </div>
+   583→            <div className="grid gap-2">
+   584→              <Label htmlFor="form-status">สถานะ</Label>
+   585→              <Select value={form.status} onValueChange={(v) => setForm({ ...form, status: v as AssetStatus })}>
+   586→                <SelectTrigger id="form-status">
+   587→                  <SelectValue />
+   588→                </SelectTrigger>
+   589→                <SelectContent>
+   590→                  <SelectItem value="AVAILABLE">พร้อมใช้งาน</SelectItem>
+   591→                  <SelectItem value="BORROWED">ถูกยืม</SelectItem>
+   592→                  <SelectItem value="MAINTENANCE">ซ่อมบำรุง</SelectItem>
+   593→                  <SelectItem value="WRITEOFF">ตัดจำหน่าย</SelectItem>
+   594→                </SelectContent>
+   595→              </Select>
+   596→            </div>
+   597→            <div className="grid gap-2">
+   598→              <Label htmlFor="form-desc">รายละเอียด</Label>
+   599→              <Textarea id="form-desc" value={form.description} onChange={(e) => setForm({ ...form, description: e.target.value })} placeholder="รายละเอียดเพิ่มเติม" rows={3} />
+   600→            </div>
+   601→          </div>
+   602→          <div className="flex justify-end gap-3 pt-2">
+   603→            <Button variant="outline" onClick={() => setShowForm(false)}>ยกเลิก</Button>
+   604→            <Button onClick={handleSubmit} disabled={formLoading} className="bg-emerald-600 hover:bg-emerald-700 text-white">
+   605→              {formLoading ? 'กำลังบันทึก...' : selectedAsset ? 'บันทึกการแก้ไข' : 'เพิ่มครุภัณฑ์'}
+   606→            </Button>
+   607→          </div>
+   608→        </DialogContent>
+   609→      </Dialog>
+   610→
+   611→      {/* Detail Dialog */}
+   612→      <Dialog open={showDetail} onOpenChange={setShowDetail}>
+   613→        <DialogContent className="max-w-2xl max-h-[90vh]">
+   614→          <DialogHeader>
+   615→            <DialogTitle>รายละเอียดครุภัณฑ์</DialogTitle>
+   616→          </DialogHeader>
+   617→          {detailData && (
+   618→            <ScrollArea className="max-h-[70vh] pr-4 custom-scrollbar">
+   619→              <div className="space-y-6">
+   620→                {/* Header with QR */}
+   621→                <div className="flex flex-col sm:flex-row gap-6">
+   622→                  <div className="flex-1 space-y-3">
+   623→                    <div className="flex items-center gap-2">
+   624→                      <Badge variant="outline" className={`font-mono text-xs ${STATUS_BADGE[detailData.status]}`}>
+   625→                        {detailData.sku}
+   626→                      </Badge>
+   627→                      <Badge variant="outline" className={`text-xs ${STATUS_BADGE[detailData.status]}`}>
+   628→                        {STATUS_LABELS[detailData.status]}
+   629→                      </Badge>
+   630→                    </div>
+   631→                    <h3 className="text-xl font-bold">{detailData.name}</h3>
+   632→                    <p className="text-sm text-muted-foreground">{detailData.category?.name || '-'}</p>
+   633→                  </div>
+   634→                  {qrUrl && (
+   635→                    <div className="flex flex-col items-center gap-2 shrink-0">
+   636→                      <img src={qrUrl} alt="QR Code" className="h-32 w-32 rounded-lg border p-1" />
+   637→                      <p className="text-[10px] text-muted-foreground font-mono">{detailData.sku}</p>
+   638→                    </div>
+   639→                  )}
+   640→                </div>
+   641→
+   642→                <Separator />
+   643→
+   644→                {/* Info Grid */}
+   645→                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+   646→                  <div className="flex items-start gap-3">
+   647→                    <Package className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   648→                    <div>
+   649→                      <p className="text-xs text-muted-foreground">ราคาซื้อ</p>
+   650→                      <p className="text-sm font-medium">{formatCurrency(detailData.purchasePrice)} บาท</p>
+   651→                    </div>
+   652→                  </div>
+   653→                  <div className="flex items-start gap-3">
+   654→                    <QrCode className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   655→                    <div>
+   656→                      <p className="text-xs text-muted-foreground">มูลค่าปัจจุบัน</p>
+   657→                      <p className="text-sm font-medium text-emerald-600">{formatCurrency(detailData.currentValue)} บาท</p>
+   658→                    </div>
+   659→                  </div>
+   660→                  <div className="flex items-start gap-3">
+   661→                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   662→                    <div>
+   663→                      <p className="text-xs text-muted-foreground">วันที่ซื้อ</p>
+   664→                      <p className="text-sm font-medium">{detailData.purchaseDate ? format(new Date(detailData.purchaseDate), 'd MMMM yyyy', { locale: th }) : '-'}</p>
+   665→                    </div>
+   666→                  </div>
+   667→                  <div className="flex items-start gap-3">
+   668→                    <Shield className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   669→                    <div>
+   670→                      <p className="text-xs text-muted-foreground">วันหมดประกัน</p>
+   671→                      <p className="text-sm font-medium">{detailData.warrantyExpiry ? format(new Date(detailData.warrantyExpiry), 'd MMMM yyyy', { locale: th }) : '-'}</p>
+   672→                    </div>
+   673→                  </div>
+   674→                  <div className="flex items-start gap-3">
+   675→                    <MapPin className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   676→                    <div>
+   677→                      <p className="text-xs text-muted-foreground">สถานที่ตั้ง</p>
+   678→                      <p className="text-sm font-medium">{detailData.location || '-'}</p>
+   679→                    </div>
+   680→                  </div>
+   681→                  <div className="flex items-start gap-3">
+   682→                    <Calendar className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
+   683→                    <div>
+   684→                      <p className="text-xs text-muted-foreground">อายุการใช้งาน</p>
+   685→                      <p className="text-sm font-medium">{detailData.usefulLifeYears} ปี</p>
+   686→                    </div>
+   687→                  </div>
+   688→                </div>
+   689→
+   690→                {detailData.description && (
+   691→                  <>
+   692→                    <Separator />
+   693→                    <div>
+   694→                      <p className="text-xs text-muted-foreground mb-1">รายละเอียด</p>
+   695→                      <p className="text-sm whitespace-pre-wrap">{detailData.description}</p>
+   696→                    </div>
+   697→                  </>
+   698→                )}
+   699→
+   700→                {/* Depreciation info */}
+   701→                <Separator />
+   702→                <div>
+   703→                  <CardHeader className="p-0 pb-3">
+   704→                    <CardTitle className="text-sm font-medium">ตารางค่าเสื่อมราคา</CardTitle>
+   705→                  </CardHeader>
+   706→                  <div className="overflow-x-auto">
+   707→                    <Table>
+   708→                      <TableHeader>
+   709→                        <TableRow>
+   710→                          <TableHead className="font-medium text-muted-foreground text-xs">ปีที่</TableHead>
+   711→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">มูลค่าเริ่มต้น</TableHead>
+   712→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">ค่าเสื่อม</TableHead>
+   713→                          <TableHead className="font-medium text-muted-foreground text-xs text-right">มูลค่าสิ้นปี</TableHead>
+   714→                        </TableRow>
+   715→                      </TableHeader>
+   716→                      <TableBody>
+   717→                        {Array.from({ length: detailData.usefulLifeYears }, (_, i) => {
+   718→                          const annualDep = (detailData.purchasePrice - detailData.salvageValue) / detailData.usefulLifeYears;
+   719→                          const beginVal = Math.max(detailData.salvageValue, detailData.purchasePrice - annualDep * i);
+   720→                          const endVal = Math.max(detailData.salvageValue, detailData.purchasePrice - annualDep * (i + 1));
+   721→                          return (
+   722→                            <TableRow key={i}>
+   723→                              <TableCell className="text-xs">{i + 1}</TableCell>
+   724→                              <TableCell className="text-xs text-right">{formatCurrency(beginVal)}</TableCell>
+   725→                              <TableCell className="text-xs text-right">{formatCurrency(annualDep)}</TableCell>
+   726→                              <TableCell className="text-xs text-right">{formatCurrency(endVal)}</TableCell>
+   727→                            </TableRow>
+   728→                          );
+   729→                        })}
+   730→                      </TableBody>
+   731→                    </Table>
+   732→                  </div>
+   733→                </div>
+   734→
+   735→                {/* Borrow History */}
+   736→                {detailData.borrowRecords && detailData.borrowRecords.length > 0 && (
+   737→                  <>
+   738→                    <Separator />
+   739→                    <div>
+   740→                      <CardHeader className="p-0 pb-3">
+   741→                        <CardTitle className="text-sm font-medium">ประวัติการยืม-คืน</CardTitle>
+   742→                      </CardHeader>
+   743→                      <ScrollArea className="max-h-48 custom-scrollbar">
+   744→                        <Table>
+   745→                          <TableHeader>
+   746→                            <TableRow>
+   747→                              <TableHead className="font-medium text-muted-foreground text-xs">ผู้ยืม</TableHead>
+   748→                              <TableHead className="font-medium text-muted-foreground text-xs">วันยืม</TableHead>
+   749→                              <TableHead className="font-medium text-muted-foreground text-xs">กำหนดคืน</TableHead>
+   750→                              <TableHead className="font-medium text-muted-foreground text-xs">สถานะ</TableHead>
+   751→                            </TableRow>
+   752→                          </TableHeader>
+   753→                          <TableBody>
+   754→                            {detailData.borrowRecords.map((record) => (
+   755→                              <TableRow key={record.id}>
+   756→                                <TableCell className="text-xs">{record.user?.name || '-'}</TableCell>
+   757→                                <TableCell className="text-xs">{format(new Date(record.borrowDate), 'd MMM yy', { locale: th })}</TableCell>
+   758→                                <TableCell className="text-xs">{format(new Date(record.expectedReturnDate), 'd MMM yy', { locale: th })}</TableCell>
+   759→                                <TableCell>
+   760→                                  <Badge variant="outline" className="text-[10px]">
+   761→                                    {BORROW_STATUS_LABELS[record.status] || record.status}
+   762→                                  </Badge>
+   763→                                </TableCell>
+   764→                              </TableRow>
+   765→                            ))}
+   766→                          </TableBody>
+   767→                        </Table>
+   768→                      </ScrollArea>
+   769→                    </div>
+   770→                  </>
+   771→                )}
+   772→
+   773→                {/* Maintenance History */}
+   774→                {detailData.maintenanceLogs && detailData.maintenanceLogs.length > 0 && (
+   775→                  <>
+   776→                    <Separator />
+   777→                    <div>
+   778→                      <CardHeader className="p-0 pb-3">
+   779→                        <CardTitle className="text-sm font-medium">ประวัติการซ่อมบำรุง</CardTitle>
+   780→                      </CardHeader>
+   781→                      <ScrollArea className="max-h-48 custom-scrollbar">
+   782→                        <Table>
+   783→                          <TableHeader>
+   784→                            <TableRow>
+   785→                              <TableHead className="font-medium text-muted-foreground text-xs">วันที่</TableHead>
+   786→                              <TableHead className="font-medium text-muted-foreground text-xs">รายละเอียด</TableHead>
+   787→                              <TableHead className="font-medium text-muted-foreground text-xs text-right">ค่าใช้จ่าย</TableHead>
+   788→                              <TableHead className="font-medium text-muted-foreground text-xs">สถานะ</TableHead>
+   789→                            </TableRow>
+   790→                          </TableHeader>
+   791→                          <TableBody>
+   792→                            {detailData.maintenanceLogs.map((log) => (
+   793→                              <TableRow key={log.id}>
+   794→                                <TableCell className="text-xs">{format(new Date(log.date), 'd MMM yy', { locale: th })}</TableCell>
+   795→                                <TableCell className="text-xs max-w-[200px] truncate">{log.description}</TableCell>
+   796→                                <TableCell className="text-xs text-right">{formatCurrency(log.cost)}</TableCell>
+   797→                                <TableCell>
+   798→                                  <Badge variant="outline" className="text-[10px]">
+   799→                                    {log.status === 'IN_PROGRESS' ? 'ดำเนินการ' : 'เสร็จสิ้น'}
+   800→                                  </Badge>
+   801→                                </TableCell>
+   802→                              </TableRow>
+   803→                            ))}
+   804→                          </TableBody>
+   805→                        </Table>
+   806→                      </ScrollArea>
+   807→                    </div>
+   808→                  </>
+   809→                )}
+   810→              </div>
+   811→            </ScrollArea>
+   812→          )}
+   813→        </DialogContent>
+   814→      </Dialog>
+   815→
+   816→      {/* Delete Confirmation */}
+   817→      <AlertDialog open={showDelete} onOpenChange={setShowDelete}>
+   818→        <AlertDialogContent>
+   819→          <AlertDialogHeader>
+   820→            <AlertDialogTitle>ยืนยันการลบครุภัณฑ์</AlertDialogTitle>
+   821→            <AlertDialogDescription>
+   822→              คุณต้องการลบ &ldquo;{selectedAsset?.name}&rdquo; ({selectedAsset?.sku}) หรือไม่?
+   823→              การกระทำนี้ไม่สามารถย้อนกลับได้ ข้อมูลที่เกี่ยวข้องทั้งหมดจะถูกลบออก
+   824→            </AlertDialogDescription>
+   825→          </AlertDialogHeader>
+   826→          <AlertDialogFooter>
+   827→            <AlertDialogCancel disabled={deleteLoading}>ยกเลิก</AlertDialogCancel>
+   828→            <AlertDialogAction
+   829→              onClick={handleDelete}
+   830→              disabled={deleteLoading}
+   831→              className="bg-red-600 hover:bg-red-700 text-white"
+   832→            >
+   833→              {deleteLoading ? 'กำลังลบ...' : 'ลบ'}
+   834→            </AlertDialogAction>
+   835→          </AlertDialogFooter>
+   836→        </AlertDialogContent>
+   837→      </AlertDialog>
+   838→
+   839→      {showBulkUpload && (
+   840→        <BulkUploadDialog
+   841→          open={showBulkUpload}
+   842→          onOpenChange={setShowBulkUpload}
+   843→          onSuccess={() => { fetchAssets(); }}
+   844→        />
+   845→      )}
+   846→
+   847→      {/* Thermal Label Print View */}
+   848→      {showPrintView && (
+   849→        <ThermalLabelPrintView
+   850→          assets={selectedAssets}
+   851→          labelSize={labelSize}
+   852→          onLabelSizeChange={setLabelSize}
+   853→          onClose={() => setShowPrintView(false)}
+   854→          onPrint={triggerPrint}
+   855→        />
+   856→      )}
+   857→    </div>
+   858→  );
+   859→}

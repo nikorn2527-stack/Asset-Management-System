@@ -1,0 +1,16 @@
+node_modules
+.next
+.git
+.gitignore
+.env*
+!.env.example
+*.md
+!DEPLOY.md
+db/*.db
+*.log
+skills/
+.claude
+.z-ai-config
+test/
+prompt/
+vercel.json
